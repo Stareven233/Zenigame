@@ -1,0 +1,6 @@
+.idea/
+*.pyc
+venv/
+*.noe
+base64_encoder.py
+app/static/

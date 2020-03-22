@@ -1,0 +1,9 @@
+from app import create_app, create_db_table
+
+app = create_app()
+#  修改了flask_uploads里关于Werkzeug secure_filename等的导入
+
+
+if __name__ == '__main__':
+    # create_db_table(app)
+    app.run(debug=False)
