@@ -1,8 +1,12 @@
 from flask import Flask
-from config import Config
+from config import Config, ALLOWED_IMG_EXT
 from flask_sqlalchemy import SQLAlchemy
-# from flask_restful import Api
 from flask_uploads import UploadSet, configure_uploads
+from json import dumps
+from functools import partial
+
+json_config = {'ensure_ascii': False, 'indent': None, 'separators': (',', ':')}
+compact_dumps = partial(dumps, **json_config)
 
 
 class CustomUpSet(UploadSet):
@@ -11,8 +15,7 @@ class CustomUpSet(UploadSet):
 
 
 db = SQLAlchemy()
-# api = Api()
-up_files = CustomUpSet(name='FILES', extensions=('jpg', 'png', 'jpeg',))
+up_files = CustomUpSet(name='FILES', extensions=ALLOWED_IMG_EXT)
 
 
 def create_app():
@@ -21,7 +24,7 @@ def create_app():
     db.init_app(app)
     configure_uploads(app, up_files)
     from .v1 import v1  # 不能在db初始化前，因为v1有用到db
-    app.register_blueprint(v1, url_prefix='/api/v1')
+    app.register_blueprint(v1, url_prefix='/v1')
     return app
 
 

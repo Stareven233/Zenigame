@@ -1,9 +1,8 @@
 from . import db
 from sqlalchemy import Column, String, Integer, Boolean, DateTime, ForeignKey
-from datetime import datetime
 from itsdangerous import TimedJSONWebSignatureSerializer as Serializer
 from itsdangerous import SignatureExpired, BadSignature
-from config import Config
+from config import Config, DEFAULT_AVATAR
 from time import time
 from passlib.apps import mysql_context as pwd_context
 
@@ -23,7 +22,7 @@ class User(db.Model):
     username = Column(String(16), unique=True, nullable=False)
     password_hash = Column(String(64), nullable=False)
     name = Column(String(16), index=True)  # 昵称
-    avatar = Column(String(4), default="")  # 仅存后缀，名同id
+    avatar = Column(String(16), default=DEFAULT_AVATAR)
     teams = db.relationship('Team', backref='member', lazy='dynamic')
 
     def __init__(self, **kwargs):

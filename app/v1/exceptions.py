@@ -1,32 +1,28 @@
-custom_errors = {
-    'UserAlreadyExistsError': {
-        'code': 1001,
-        'message': '用户名重复，该用户已存在',
-        'status': 409
-    },
-    'IncorrectPasswordError': {
-        'code': 1003,
-        'message': '密码错误，认证无效',
-        'status': 401
-    },
-    'UploadNotAllowed': {
-        'code': 2003,
-        'message': '无效的上传文件',
-        'status': 422
-    }
-}
+from werkzeug.exceptions import HTTPException
+from werkzeug.wrappers import BaseResponse
+from .. import compact_dumps
 
 
-class AuthException(Exception):
-    def __init__(self, code=1000, message='认证无效', *args):
-        self.args = args
-        self.code = code
-        self.message = message
+class MyApiError(HTTPException):
+    e_code = 0
+
+    def __init__(self, description=None):
+        super().__init__(description)
+        resp = BaseResponse(response=self.to_json(), status=self.code, mimetype='application/json')
+        self.response = resp
+
+    def to_json(self):
+        response = {'code': self.e_code, 'msg': self.description}
+        return compact_dumps(response)
 
 
-class UserAlreadyExistsError(AuthException):
-    pass
+class UserAlreadyExistsError(MyApiError):
+    code = 409
+    description = '该用户已存在'
+    e_code = 1101
 
 
-class IncorrectPasswordError(AuthException):
-    pass
+class IncorrectPasswordError(MyApiError):
+    code = 401
+    description = '密码错误，认证无效'
+    e_code = 1102

@@ -1,16 +1,13 @@
 from flask import Blueprint
 from flask_restful import Api
-from config import Config
-from .exceptions import custom_errors
+from .exceptions import MyApiError
+from config import GLOBAL_ERROR_CODE
 
 
 class CustomApi(Api):
     def error_router(self, original_handler, e):
-        if e.__str__()[:3] in Config.GLOBAL_ERROR_CODE:
-            return original_handler(e)
-        # 保证自定义的handler有机会工作
-
-        if self._has_fr_route():
+        check = e.__str__()[:3] not in GLOBAL_ERROR_CODE or isinstance(e, MyApiError)
+        if self._has_fr_route() and check:
             try:
                 return self.handle_error(e)
             except Exception:
@@ -19,7 +16,8 @@ class CustomApi(Api):
 
 
 v1 = Blueprint('v1', __name__)
-api = CustomApi(v1, errors=custom_errors)
+api = Api(v1)
+# api = Api(v1, errors=custom_errors) 不够灵活
 
 
 from . import users, errors
