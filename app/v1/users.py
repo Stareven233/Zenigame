@@ -10,12 +10,18 @@ from os import remove
 from flask_uploads import extension
 from config import Config, DEFAULT_AVATAR
 
+
+class TeamItem(fields.Raw):
+    def format(self, value):
+        return value.tid
+
+
 user_fields = {
     'id': fields.Integer,
     'username': fields.String,
     'name': fields.String,
     'avatar': fields.Url('v1.avatar', attribute='avatar', absolute=True),
-    'team_id': fields.List(fields.Integer, attribute='teams', default=[])  # 让team通过__repr__打印
+    'team_id': fields.List(TeamItem, attribute='teams')  # , default=[]
 }
 
 
@@ -77,7 +83,7 @@ class UserListAPI(Resource):
         response = {'code': 0, 'msg': '', 'data': marshal(user, user_fields)}
         return response, 200
 
-    def patch(self):
+    def patch(self):  # 登录即可确认身份，故不需id
         self.reqparse.add_argument('name', type=str, required=True, location='json')
         args = self.reqparse.parse_args()
 

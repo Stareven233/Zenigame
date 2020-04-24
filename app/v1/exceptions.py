@@ -26,3 +26,9 @@ class IncorrectPasswordError(MyApiError):
     code = 401
     description = '密码错误，认证无效'
     e_code = 1102
+
+
+class BadRequestError(MyApiError):
+    code = 400
+    description = '请检查请求参数是否正确'
+    e_code = 2002

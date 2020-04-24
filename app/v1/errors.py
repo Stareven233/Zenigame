@@ -44,7 +44,7 @@ def not_found(e):
 @v1.app_errorhandler(400)
 def bad_request(e):
     response['code'] = 2002
-    response['message'] = "请求参数错误"
+    response['message'] = "请检查请求参数是否正确"
     return jsonify(response), 400
 
 
