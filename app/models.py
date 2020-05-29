@@ -1,5 +1,5 @@
 from . import db
-from sqlalchemy import Column, String, Integer, TIME
+from sqlalchemy import Column, String, Integer, TIMESTAMP
 from itsdangerous import TimedJSONWebSignatureSerializer as Serializer
 from itsdangerous import SignatureExpired, BadSignature
 from config import Config, DEFAULT_AVATAR
@@ -10,6 +10,7 @@ from passlib.apps import mysql_context as pwd_context
 class User(db.Model):
     __tablename__ = 'users'
     id = Column(Integer, primary_key=True)
+    email = Column(String(64), nullable=False)  # 但email最长可以到320位?
     username = Column(String(16), unique=True, nullable=False)
     password_hash = Column(String(64), nullable=False)
     name = Column(String(16), index=True)  # 昵称
@@ -26,7 +27,8 @@ class User(db.Model):
 
     def generate_auth_token(self, expiration=3600):
         s = Serializer(Config.SECRET_KEY, expires_in=expiration)
-        return s.dumps({'uid': self.id, 'time': time()})
+        return s.dumps({'uid': self.id})
+        # return s.dumps({'uid': self.id, 'time': time()})  todo 发布时恢复
 
     @staticmethod
     def verify_auth_token(token):
@@ -53,8 +55,8 @@ class Team(db.Model):
     leader = Column(Integer)
     name = Column(String(16), unique=True)
     desc = Column(String(64))
-    check_s = Column(Integer)  # Column(TIME)
-    check_e = Column(Integer)
+    check_s = Column(TIMESTAMP)  # Column(TIME)
+    check_e = Column(TIMESTAMP)
     users = db.relationship('User', secondary=t_users, backref='teams', lazy='dynamic')
 
     @property

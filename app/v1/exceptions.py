@@ -1,5 +1,5 @@
 from werkzeug.exceptions import HTTPException
-from werkzeug.wrappers import BaseResponse
+from werkzeug.wrappers import Response
 from .. import compact_dumps
 
 
@@ -8,7 +8,7 @@ class MyApiError(HTTPException):
 
     def __init__(self, description=None):
         super().__init__(description)
-        resp = BaseResponse(response=self.to_json(), status=self.code, mimetype='application/json')
+        resp = Response(response=self.to_json(), status=self.code, mimetype='application/json')
         self.response = resp
 
     def to_json(self):

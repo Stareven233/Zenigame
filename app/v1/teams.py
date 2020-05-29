@@ -6,32 +6,38 @@ from .. import db
 from .decorators import auth
 from .exceptions import BadRequestError
 
+
+user_fields = {
+    'id': fields.Integer,
+    'name': fields.String,
+    'avatar': fields.Url('v1.get_avatar', attribute='avatar', absolute=True),
+}
+
+
+class UserItem(fields.Raw):
+    def format(self, value):
+        return marshal(value, user_fields)
+
+
 team_fields = {
     'id': fields.Integer,
     'name': fields.String,
     'desc': fields.String,
+    'leader_id': fields.Integer(attribute='leader'),
     'check_s': fields.Integer,
     'check_e': fields.Integer,
+    'members': fields.List(UserItem, attribute='users'),
 }
 
 
-# def time24(t_str):
-#     match = re.fullmatch(r'(\d{2}):(\d{2}):(\d{2})', t_str, re.A)
-#     if match is None:
-#         raise TypeError("must be a string like: 'hh:mm:ss'")
-#     h, m, s = tuple(map(int, match.groups()))
-#     if h > 23 or m > 59 or s > 59:
-#         raise TypeError("must be a legal 24-hour system time string")
-#     return t_str
-
-
 def time_check(check_s, check_e):
+    """二者间有大小关系，不可直接 flask_restful.inputs.int_range """
     if check_s < 0 or check_e < 0:
         raise BadRequestError('打卡时间不可为负值')
     if check_s >= 24*60*60 or check_e >= 86400:
-        raise BadRequestError('打卡时间必须在24*60*60以内')
+        raise BadRequestError('打卡时间必须在一天(24*60*60s)以内')
     if check_s >= check_e:
-        raise BadRequestError('打卡起始时间须小于结束时间')
+        raise BadRequestError('打卡开始时间须小于截止时间')
 
 
 class TeamListAPI(Resource):
@@ -46,6 +52,7 @@ class TeamListAPI(Resource):
         super().__init__()
 
     def post(self):
+        """登录用户创建一个团队"""
         args = self.reqpost.parse_args(strict=True)
         time_check(args['check_s'], args['check_e'])
 
@@ -75,19 +82,24 @@ class TeamAPI(Resource):
         super().__init__()
 
     def post(self, tid):
+        """对某个团队团长主动拉人/踢人 他人加入/退出 及团长职位转让
+        action: 1-加入 2-退出 3-转移职务
+        uid: 被操作者，允许操作自己
+        """
         args = self.reqparse.parse_args(strict=True)
 
         team = Team.query.get_or_404(tid)
         operator = g.current_user
         action, uid = args['action'], args['uid']
         user = User.query.get_or_404(uid)
+
         if operator.id == team.leader and operator.id == user.id:
-            raise BadRequestError('团长不可操作自己(加入/退出)，请先转交团长职位')
-        time_check(args['check_s'], args['check_e'])
+            raise BadRequestError('团长不可加入/退出，请先转交团长职位')
 
         if operator.id == team.leader or operator.id == user.id:
             joined = bool(team.users.filter_by(id=user.id).first())
-            if action == 1 and not joined:  # action: 1-加入 2-退出 3-转移职务
+            # 是否已加入该团队
+            if action == 1 and not joined:
                 team.users.append(user)
             elif action == 2 and joined:
                 team.users.remove(user)
@@ -106,11 +118,20 @@ class TeamAPI(Resource):
 
     def patch(self, tid):
         args = self.reqpatch.parse_args(strict=True)
-
         team = Team.query.get_or_404(tid)
         operator = g.current_user
+
         if operator.id != team.leader:
             raise BadRequestError('仅团长可修改团队信息')
+
+        check_s, check_e = args.check_s, args.check_e
+        if check_s and check_e:
+            time_check(check_s, check_e)
+        elif check_s:
+            time_check(check_s, team.check_e)
+        elif check_e:
+            time_check(team.check_s, check_e)
+
         team.alter(args)
         db.session.add(team)
         db.session.commit()
