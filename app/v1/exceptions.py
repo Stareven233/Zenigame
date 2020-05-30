@@ -12,8 +12,26 @@ class MyApiError(HTTPException):
         self.response = resp
 
     def to_json(self):
-        response = {'code': self.e_code, 'msg': self.description}
+        response = {'code': self.e_code, 'message': self.description}
         return compact_dumps(response)
+
+
+class ForbiddenError(MyApiError):
+    code = 403
+    description = '禁止访问该资源'
+    e_code = 1001
+
+
+class NotFound(MyApiError):
+    code = 404
+    description = '请求资源不存在'
+    e_code = 2001
+
+
+class BadRequestError(MyApiError):
+    code = 400
+    description = '请检查请求参数是否正确'
+    e_code = 2002
 
 
 class UserAlreadyExistsError(MyApiError):
@@ -26,9 +44,3 @@ class IncorrectPasswordError(MyApiError):
     code = 401
     description = '密码错误，认证无效'
     e_code = 1102
-
-
-class BadRequestError(MyApiError):
-    code = 400
-    description = '请检查请求参数是否正确'
-    e_code = 2002

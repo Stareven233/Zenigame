@@ -21,6 +21,7 @@ user_fields = {
     'username': fields.String,
     'name': fields.String,
     'avatar': fields.Url('v1.get_avatar', attribute='avatar', absolute=True),
+    'email': fields.String,
     'team_id': fields.List(TeamItem, attribute='teams')  # , default=[]
 }
 
@@ -33,7 +34,7 @@ class TokenAPI(Resource):
         access_token = g.current_user.generate_auth_token(expiration=24*60*60)
         refresh_token = g.current_user.generate_auth_token(expiration=30*24*3600)
 
-        response = {'code': 0, 'msg': '', 'data': {}}
+        response = {'code': 0, 'message': '', 'data': {}}
         response['data']['access_token'] = access_token.decode('ascii')
         response['data']['refresh_token'] = refresh_token.decode('ascii')
         return response, 200
@@ -58,15 +59,15 @@ class UserListAPI(Resource):
             user = User(avatar=DEFAULT_AVATAR) if args.id else g.current_user
         # user = user or g.current_user
 
-        response = {'code': 0, 'msg': '', 'data': marshal(user, user_fields)}
+        response = {'code': 0, 'message': '', 'data': marshal(user, user_fields)}
         return response, 200
 
     def post(self):
         email_t = inputs.regex(r'^[0-9a-zA-Z_-]+@[0-9a-zA-Z_-]+(?:.[0-9a-zA-Z_-]+){1,2}$')
-        username_t = inputs.regex(r'^[0-9a-zA-Z\u4e00-\u9fa5]+$')  # 不能跟email混淆
+        username_t = inputs.regex(r'^[0-9a-zA-Z\u4e00-\u9fa5]{2,16}$')  # 不能跟email混淆
 
-        self.reqparse.add_argument('email', type=email_t, required=True, help='邮箱不能为空', location='json')
-        self.reqparse.add_argument('username', type=username_t, required=True, help='用户名不能为空', location='json')
+        self.reqparse.add_argument('email', type=email_t, required=True, help='为空或不合法', location='json')
+        self.reqparse.add_argument('username', type=username_t, required=True, help='为空或不合法', location='json')
         self.reqparse.add_argument('password', type=str, required=True, help='密码不能为空', location='json')
         self.reqparse.add_argument('name', type=str, required=False, help='不填则默认为username', location='json')
         args = self.reqparse.parse_args(strict=True)
@@ -84,20 +85,22 @@ class UserListAPI(Resource):
         db.session.add(user)
         db.session.commit()
 
-        response = {'code': 0, 'msg': '', 'data': marshal(user, user_fields)}
+        response = {'code': 0, 'message': '', 'data': marshal(user, user_fields)}
         return response, 201
 
     def patch(self):  # 登录即可确认身份，故不需id
         """修改用户名"""
-        self.reqparse.add_argument('name', type=str, required=True, location='json')
+        email_t = inputs.regex(r'^[0-9a-zA-Z_-]+@[0-9a-zA-Z_-]+(?:.[0-9a-zA-Z_-]+){1,2}$')
+        self.reqparse.add_argument('name', type=str, required=False, location='json')
+        self.reqparse.add_argument('email', type=email_t, required=False, location='json')
         args = self.reqparse.parse_args(strict=True)
 
         user = g.current_user
-        user.name = args['name']
+        user.alter(args)
         db.session.add(user)
         db.session.commit()
 
-        response = {'code': 0, 'msg': '', 'data': marshal(user, user_fields)}
+        response = {'code': 0, 'message': '', 'data': marshal(user, user_fields)}
         return response, 200
 
 
@@ -120,7 +123,7 @@ class UserPwdAPI(Resource):
         db.session.add(user)
         db.session.commit()
 
-        response = {'code': 0, 'msg': '', 'data': marshal(user, user_fields)}
+        response = {'code': 0, 'message': '', 'data': marshal(user, user_fields)}
         return response, 200
 
 
@@ -150,7 +153,7 @@ class UserAvatarsAPI(Resource):
         db.session.add(user)
         db.session.commit()
 
-        response = {'code': 0, 'msg': '', 'data': url_for('v1.get_avatar', avatar=user.avatar, _external=True)}
+        response = {'code': 0, 'message': '', 'data': url_for('v1.get_avatar', avatar=user.avatar, _external=True)}
         return response, 200
 
 

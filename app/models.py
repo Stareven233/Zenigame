@@ -5,6 +5,7 @@ from itsdangerous import SignatureExpired, BadSignature
 from config import Config, DEFAULT_AVATAR
 from time import time
 from passlib.apps import mysql_context as pwd_context
+from secrets import token_urlsafe
 
 
 class User(db.Model):
@@ -41,6 +42,12 @@ class User(db.Model):
             return None
         return User.query.get(data['uid'])
 
+    def alter(self, kwargs):
+        for k, v in kwargs.items():
+            if v is not None:
+                setattr(self, k, v)
+        return self
+
 
 t_users = db.Table('t_users',
                    Column('team_id', Integer, db.ForeignKey('teams.id')),
@@ -57,6 +64,7 @@ class Team(db.Model):
     desc = Column(String(64))
     check_s = Column(TIMESTAMP)  # Column(TIME)
     check_e = Column(TIMESTAMP)
+    inv_code = Column(String(16), unique=True)  # 邀请码
     users = db.relationship('User', secondary=t_users, backref='teams', lazy='dynamic')
 
     @property
@@ -68,3 +76,9 @@ class Team(db.Model):
             if v is not None:
                 setattr(self, k, v)
         return self
+
+    def renew_inv_code(self):  # 16位base64，冲突可能性仅 1/2^256
+        new_code = token_urlsafe(12)
+        while self.__class__.query.filter_by(inv_code=new_code).first():
+            new_code = token_urlsafe(12)
+        self.inv_code = new_code
