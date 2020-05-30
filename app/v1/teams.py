@@ -73,7 +73,7 @@ class TeamListAPI(Resource):
         db.session.commit()
 
         response = {'code': 0, 'message': '', 'data': marshal(team, team_fields)}
-        return response, 200
+        return response, 201
 
 
 class TeamAPI(Resource):

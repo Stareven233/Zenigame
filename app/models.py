@@ -1,5 +1,6 @@
 from . import db
 from sqlalchemy import Column, String, Integer, TIMESTAMP
+from sqlalchemy import ForeignKey, DateTime
 from itsdangerous import TimedJSONWebSignatureSerializer as Serializer
 from itsdangerous import SignatureExpired, BadSignature
 from config import Config, DEFAULT_AVATAR
@@ -66,6 +67,7 @@ class Team(db.Model):
     check_e = Column(TIMESTAMP)
     inv_code = Column(String(16), unique=True)  # 邀请码
     users = db.relationship('User', secondary=t_users, backref='teams', lazy='dynamic')
+    schedules = db.relationship('Schedule', backref='team', lazy='dynamic')  # team.schedules返回查询对象而非结果
 
     @property
     def tid(self):
@@ -82,3 +84,12 @@ class Team(db.Model):
         while self.__class__.query.filter_by(inv_code=new_code).first():
             new_code = token_urlsafe(12)
         self.inv_code = new_code
+
+
+class Schedule(db.Model):
+    __tablename__ = "schedules"
+    id = Column(Integer, primary_key=True)
+    desc = Column(String(32), nullable=False)
+    start = Column(DateTime, nullable=False, index=True)
+    end = Column(DateTime, nullable=False, index=True)
+    team_id = Column(Integer, ForeignKey('teams.id'))
