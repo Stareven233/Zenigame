@@ -26,6 +26,7 @@ class NotFound(MyApiError):
     code = 404
     description = '请求资源不存在'
     e_code = 2001
+# 用abort抛出，errorhandler处理器捕获不能定制message
 
 
 class BadRequestError(MyApiError):

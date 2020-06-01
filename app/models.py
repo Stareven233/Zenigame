@@ -1,6 +1,7 @@
 from . import db
 from sqlalchemy import Column, String, Integer, TIMESTAMP
-from sqlalchemy import ForeignKey, DateTime
+from sqlalchemy import ForeignKey, Date
+from sqlalchemy.dialects.mysql import ENUM
 from itsdangerous import TimedJSONWebSignatureSerializer as Serializer
 from itsdangerous import SignatureExpired, BadSignature
 from config import Config, DEFAULT_AVATAR
@@ -90,6 +91,13 @@ class Schedule(db.Model):
     __tablename__ = "schedules"
     id = Column(Integer, primary_key=True)
     desc = Column(String(32), nullable=False)
-    start = Column(DateTime, nullable=False, index=True)
-    end = Column(DateTime, nullable=False, index=True)
+    urgency = Column(ENUM('1', '2', '3'))  # 对应三种紧急程度, 似乎只支持str；不灵活
+    start = Column(Date, nullable=False, index=True)
+    end = Column(Date, nullable=False, index=True)
     team_id = Column(Integer, ForeignKey('teams.id'))
+
+    def alter(self, kwargs):
+        for k, v in kwargs.items():
+            if v is not None:
+                setattr(self, k, v)
+        return self

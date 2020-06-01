@@ -1,7 +1,7 @@
 from . import v1
 from .decorators import basic_auth, token_auth
 
-response = {'code': 0, 'message': "", 'data': ""}
+response = {'code': 0, 'message': ""}
 
 
 @basic_auth.error_handler
