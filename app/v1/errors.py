@@ -8,14 +8,14 @@ response = {'code': 0, 'message': ""}
 def unauthorized():
     response['code'] = 1000
     response['message'] = "认证失败"
-    return response, 401
+    return response, 403
 
 
 @token_auth.error_handler
 def token_expired():
     response['code'] = 1000
     response['message'] = "认证失败"
-    return response, 401
+    return response, 403
 
 
 @v1.app_errorhandler(401)
@@ -23,7 +23,8 @@ def authorize_failed(e):
     # Flask_RESTful Api 传的参数，exception类型
     response['code'] = 1000
     response['message'] = "认证失败"
-    return response, 401
+    return response, 403
+# 认证的统一以403代替401，防止浏览器弹验证窗口
 
 
 @v1.app_errorhandler(403)

@@ -10,7 +10,7 @@ from .exceptions import BadRequestError, ForbiddenError
 user_fields = {
     'id': fields.Integer,
     'name': fields.String,
-    'avatar': fields.Url('v1.get_avatar', attribute='avatar', absolute=True),
+    'avatar': fields.Url('main.get_avatar', attribute='avatar', absolute=True),
 }
 
 
@@ -177,7 +177,7 @@ class TeamJoinAPI(Resource):
 
     def __init__(self):
         self.reqparse = reqparse.RequestParser()
-        self.reqparse.add_argument('inv', type=str, required=True, location='args')
+        self.reqparse.add_argument('inv', type=str, required=True, location=['args', 'json'])
         super().__init__()
 
     def get(self):

@@ -17,7 +17,7 @@ class User(db.Model):
     username = Column(String(16), unique=True, nullable=False)
     password_hash = Column(String(64), nullable=False)
     name = Column(String(16), index=True)  # 昵称
-    avatar = Column(String(16), default=DEFAULT_AVATAR)
+    avatar = Column(String(40), default=DEFAULT_AVATAR)
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)

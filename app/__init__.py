@@ -25,6 +25,8 @@ def create_app():
     configure_uploads(app, up_files)
     from .v1 import v1  # 不能在db初始化前，因为v1有用到db
     app.register_blueprint(v1, url_prefix='/v1')
+    from .main import main
+    app.register_blueprint(main, url_prefix='/')
     return app
 
 

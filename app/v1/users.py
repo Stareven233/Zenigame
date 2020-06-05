@@ -9,6 +9,7 @@ from werkzeug.datastructures import FileStorage
 from os import remove
 from flask_uploads import extension
 from config import Config, DEFAULT_AVATAR
+from uuid import uuid3, NAMESPACE_URL
 
 
 class TeamItem(fields.Raw):
@@ -20,7 +21,7 @@ user_fields = {
     'id': fields.Integer,
     'username': fields.String,
     'name': fields.String,
-    'avatar': fields.Url('v1.get_avatar', attribute='avatar', absolute=True),
+    'avatar': fields.Url('main.get_avatar', attribute='avatar', absolute=True),
     'email': fields.String,
     'team_id': fields.List(TeamItem, attribute='teams')  # , default=[]
 }
@@ -142,33 +143,28 @@ class UserAvatarsAPI(Resource):
         f_name = user.avatar
 
         if f_name and f_name != DEFAULT_AVATAR:
-            remove(Config.UPLOADED_FILES_DEST + f'avatar/{f_name}')
+            remove(Config.UPLOADED_FILES_DEST + f'img/{f_name}')
 
         avatar = args['avatar']
         ext = extension(avatar.filename)
-        f_name = f'{user.id}.{ext}'
-        up_files.save(avatar, name=f'avatar/{f_name}')
 
+        if f_name == DEFAULT_AVATAR:  # 节约计算，但username不能再变
+            f_name = uuid3(NAMESPACE_URL, user.username).hex.replace('-', '')
+            f_name = f'{f_name}.{ext}'
+        else:
+            f_name = f_name[:-3] + ext
+
+        up_files.save(avatar, name=f'img/{f_name}')
         user.avatar = f_name
         db.session.add(user)
         db.session.commit()
 
-        response = {'code': 0, 'message': '', 'data': url_for('v1.get_avatar', avatar=user.avatar, _external=True)}
+        avatar = url_for('main.get_avatar', avatar=user.avatar, _external=True)
+        response = {'code': 0, 'message': '', 'data': {'avatar': avatar}}
         return response, 200
-
-
-# class UserAvatarAPI(Resource):
-#     def get(self, avatar): # todo 略去，交由nginx处理
-        # return send_from_directory(Config.UPLOADED_FILES_DEST, f'avatar/{avatar}')
-
-
-@v1.route('/img/<string:avatar>')
-def get_avatar(avatar):
-    pass
 
 
 api.add_resource(TokenAPI, '/users/token', endpoint='token')
 api.add_resource(UserListAPI, '/users', endpoint='users')
 api.add_resource(UserPwdAPI, '/users/password', endpoint='password')
 api.add_resource(UserAvatarsAPI, '/users/avatar', endpoint='avatars')
-# api.add_resource(UserAvatarAPI, '/users/<string:avatar>', endpoint='avatar')
