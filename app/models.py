@@ -1,7 +1,7 @@
 from . import db
-from sqlalchemy import Column, String, Integer, TIMESTAMP
+from sqlalchemy import Column, String, Integer
 from sqlalchemy import ForeignKey, Date
-from sqlalchemy.dialects.mysql import ENUM
+from sqlalchemy.dialects.mysql import TINYINT  # ENUM
 from itsdangerous import TimedJSONWebSignatureSerializer as Serializer
 from itsdangerous import SignatureExpired, BadSignature
 from config import Config, DEFAULT_AVATAR
@@ -62,10 +62,10 @@ class Team(db.Model):
     __tablename__ = "teams"
     id = Column(Integer, primary_key=True)
     leader = Column(Integer)
-    name = Column(String(16), unique=True)
+    name = Column(String(16), unique=False)
     desc = Column(String(64))
-    check_s = Column(TIMESTAMP)  # Column(TIME)
-    check_e = Column(TIMESTAMP)
+    check_s = Column(Integer)  # Column(TIME)
+    check_e = Column(Integer)
     inv_code = Column(String(16), unique=True)  # 邀请码
     users = db.relationship('User', secondary=t_users, backref='teams', lazy='dynamic')
     schedules = db.relationship('Schedule', backref='team', lazy='dynamic')  # team.schedules返回查询对象而非结果
@@ -91,7 +91,7 @@ class Schedule(db.Model):
     __tablename__ = "schedules"
     id = Column(Integer, primary_key=True)
     desc = Column(String(32), nullable=False)
-    urgency = Column(ENUM('1', '2', '3'))  # 对应三种紧急程度, 似乎只支持str；不灵活
+    urgency = Column(TINYINT)  # 对应三种紧急程度, 似乎只支持str；不灵活
     start = Column(Date, nullable=False, index=True)
     end = Column(Date, nullable=False, index=True)
     team_id = Column(Integer, ForeignKey('teams.id'))

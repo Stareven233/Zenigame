@@ -8,4 +8,5 @@ CORS(app, supports_credentials=True)
 
 if __name__ == '__main__':
     # create_db_table(app)
-    app.run(debug=False)
+    app.run(host='0.0.0.0', debug=False)
+    # app.run(debug=True)
