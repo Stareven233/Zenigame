@@ -1,11 +1,13 @@
 from . import db
+from config import Config, DEFAULT_AVATAR
+
 from sqlalchemy import Column, String, Integer
-from sqlalchemy import ForeignKey, Date
-from sqlalchemy.dialects.mysql import TINYINT  # ENUM
+from sqlalchemy import ForeignKey, Date, DateTime, Time
+from sqlalchemy.dialects.mysql import TINYINT, BOOLEAN
+
 from itsdangerous import TimedJSONWebSignatureSerializer as Serializer
 from itsdangerous import SignatureExpired, BadSignature
-from config import Config, DEFAULT_AVATAR
-from time import time
+
 from passlib.apps import mysql_context as pwd_context
 from secrets import token_urlsafe
 
@@ -64,11 +66,12 @@ class Team(db.Model):
     leader = Column(Integer)
     name = Column(String(16), unique=False)
     desc = Column(String(64))
-    check_s = Column(Integer)  # Column(TIME)
-    check_e = Column(Integer)
+    check_s = Column(Time, index=True)
+    check_e = Column(Time, index=True)
     inv_code = Column(String(16), unique=True)  # 邀请码
     users = db.relationship('User', secondary=t_users, backref='teams', lazy='dynamic')
     schedules = db.relationship('Schedule', backref='team', lazy='dynamic')  # team.schedules返回查询对象而非结果
+    attendances = db.relationship('Attendance', backref='team', lazy='dynamic')
 
     @property
     def tid(self):
@@ -94,6 +97,21 @@ class Schedule(db.Model):
     urgency = Column(TINYINT)  # 对应三种紧急程度, 似乎只支持str；不灵活
     start = Column(Date, nullable=False, index=True)
     end = Column(Date, nullable=False, index=True)
+    team_id = Column(Integer, ForeignKey('teams.id'))
+
+    def alter(self, kwargs):
+        for k, v in kwargs.items():
+            if v is not None:
+                setattr(self, k, v)
+        return self
+
+
+class Attendance(db.Model):
+    __tablename__ = "attendances"
+    id = Column(Integer, primary_key=True)
+    uid = Column(Integer, nullable=False)
+    datetime = Column(DateTime, index=True, nullable=False)
+    punctual = Column(BOOLEAN, nullable=False)  # 以免将来团队更换打卡时间无从判断
     team_id = Column(Integer, ForeignKey('teams.id'))
 
     def alter(self, kwargs):

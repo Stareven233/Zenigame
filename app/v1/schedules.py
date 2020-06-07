@@ -40,7 +40,6 @@ class ScheduleListAPI(Resource):
         if user.id != team.leader:
             raise ForbiddenError('仅队长可创建日程')
 
-        args.urgency = str(args.urgency)  # Enum类型只能str
         s = Schedule(**args)
         team.schedules.append(s)
 

@@ -1,5 +1,6 @@
 from . import api
 from flask_restful import Resource, reqparse, fields, marshal
+from datetime import time
 from ..models import Team, User
 from flask import g, url_for
 from .. import db
@@ -30,21 +31,27 @@ team_fields = {
     'name': fields.String,
     'desc': fields.String,
     'leader_id': fields.Integer(attribute='leader'),
-    'check_s': fields.Integer,
-    'check_e': fields.Integer,
+    'check_s': fields.String,
+    'check_e': fields.String,
     'members': fields.List(UserItem, attribute='users'),
     'inv_url': JoinUrl('v1.join_team', attribute='inv_code', absolute=True)
 }
 
 
-def time_check(check_s, check_e):
+def time_check(s, e):
     """二者间有大小关系，不可直接 flask_restful.inputs.int_range """
-    if check_s < 0 or check_e < 0:
-        raise BadRequestError('打卡时间不可为负值')
-    if check_s >= 24*60*60 or check_e >= 86400:
-        raise BadRequestError('打卡时间必须在一天(24*60*60s)以内')
-    if check_s >= check_e:
-        raise BadRequestError('打卡开始时间须小于截止时间')
+    try:
+        if not isinstance(s, time):
+            s = time(*map(int, s.split(':')))
+        if not isinstance(e, time):
+            e = time(*map(int, e.split(':')))
+
+    except ValueError as err:
+        raise BadRequestError(err.__str__())
+    except Exception:
+        raise BadRequestError('非法的时间字符串')
+
+    return (s, e) if s <= e else (e, s)
 
 
 class TeamListAPI(Resource):
@@ -54,14 +61,14 @@ class TeamListAPI(Resource):
         self.reqpost = reqparse.RequestParser()
         self.reqpost.add_argument('name', type=str, required=True, location='json')
         self.reqpost.add_argument('desc', type=str, required=False, location='json')
-        self.reqpost.add_argument('check_s', type=int, required=True, location='json')
-        self.reqpost.add_argument('check_e', type=int, required=True, location='json')
+        self.reqpost.add_argument('check_s', type=str, required=True, location='json')
+        self.reqpost.add_argument('check_e', type=str, required=True, location='json')
         super().__init__()
 
     def post(self):
         """登录用户创建一个团队"""
         args = self.reqpost.parse_args(strict=True)
-        time_check(args['check_s'], args['check_e'])
+        args.check_s, args.check_e = time_check(args.check_s, args.check_e)
 
         team = Team(**args)
         user = g.current_user
@@ -86,8 +93,8 @@ class TeamAPI(Resource):
         self.reqpatch = reqparse.RequestParser()
         self.reqpatch.add_argument('name', type=str, required=False, location='json')
         self.reqpatch.add_argument('desc', type=str, required=False, location='json')
-        self.reqpatch.add_argument('check_s', type=int, required=False, location='json')
-        self.reqpatch.add_argument('check_e', type=int, required=False, location='json')
+        self.reqpatch.add_argument('check_s', type=str, required=False, location='json')
+        self.reqpatch.add_argument('check_e', type=str, required=False, location='json')
         super().__init__()
 
     def post(self, tid):
@@ -137,13 +144,13 @@ class TeamAPI(Resource):
         if operator.id != team.leader:
             raise BadRequestError('仅队长可修改团队信息')
 
-        check_s, check_e = args.check_s, args.check_e
-        if check_s and check_e:
-            time_check(check_s, check_e)
-        elif check_s:
-            time_check(check_s, team.check_e)
-        elif check_e:
-            time_check(team.check_s, check_e)
+        s, e = args.check_s, args.check_e
+        if s and not e:
+            e = team.check_e
+        elif not s and e:
+            s = team.check_s
+        if s and e:
+            args.check_s, args.check_e = time_check(s, e)
 
         team.alter(args)
         db.session.add(team)
