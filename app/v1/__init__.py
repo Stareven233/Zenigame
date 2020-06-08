@@ -20,4 +20,4 @@ api = Api(v1)
 # api = Api(v1, errors=custom_errors) 不够灵活
 
 
-from . import users, teams, errors, schedules
+from . import users, teams, errors, schedules, attendances

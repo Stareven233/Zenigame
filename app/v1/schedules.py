@@ -59,8 +59,10 @@ class ScheduleListAPI(Resource):
             raise ForbiddenError('不可获取其他团队的日程')
 
         y, m = args.year, args.month
+        days_of_month = [-1, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
         start = Date(y, m, 1)
-        end = start.replace(year=y + (m is 12), month=(m is 12) or m+1) - Date.resolution
+        end = Date(y, m, days_of_month[m])
+        # end = start.replace(year=y + (m is 12), month=(m is 12) or m+1) - Date.resolution
         # 所求月第一天与最后一天
 
         schedules = Schedule.query.filter(not_(or_(Schedule.start > end, Schedule.end < start)))

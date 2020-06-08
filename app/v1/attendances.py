@@ -6,6 +6,7 @@ from flask import g
 from .decorators import auth
 from .exceptions import ForbiddenError
 from datetime import datetime
+from sqlalchemy import extract
 
 
 attendance_fields = {
@@ -33,8 +34,11 @@ class AttendanceListAPI(Resource):
         if not team.users.filter_by(id=user.id).first():
             raise ForbiddenError('仅本团队成员可打卡')
 
-        if team.attendances.query.filter(
-                Attendance.uid == user.id, Attendance.datetime.date() == d.date()
+        if team.attendances.filter(
+                Attendance.uid == user.id,
+                extract('year', Attendance.datetime) == d.year,
+                extract('month', Attendance.datetime) == d.month,
+                extract('day', Attendance.datetime) == d.day,
         ).first():
             raise ForbiddenError('不可重复打卡')
 
@@ -42,7 +46,7 @@ class AttendanceListAPI(Resource):
             raise ForbiddenError('未到打卡时间')
 
         a = Attendance(uid=user.id, datetime=d)
-        a.punctual = bool(d.time() <= team.check_e)
+        a.punctual = d.time() <= team.check_e
         team.attendances.append(a)
 
         db.session.add_all([a, team])
@@ -70,7 +74,11 @@ class AttendanceListAPI(Resource):
         if not team.users.filter_by(id=user.id).first():
             raise ForbiddenError('不可获取其他团队的打卡记录')
 
-        query = Team.attendances.query.filter(Attendance.datetime.date() == args.date)
+        date_tuple = args.date.timetuple()[:3]
+        dt_s = datetime(*date_tuple)  # 一天的开端
+        dt_e = datetime.max.replace(*date_tuple)  # 一天的结尾
+
+        query = team.attendances.filter(Attendance.datetime.between(dt_s, dt_e))
 
         if args.self:
             # 用户查看自己的打卡情况
