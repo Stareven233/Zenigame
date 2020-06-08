@@ -59,6 +59,10 @@ t_users = db.Table('t_users',
                    )
 # 关联表r； u -> v: 多->多; u,v -> r: 一->多
 
+foreign_conf = {'lazy': 'dynamic', 'passive_deletes': True, 'cascade': "all, delete-orphan"}
+# lazy使得查询时返回查询对象；passive_deletes/cascade用于级联删除
+# passive一般与受关联表中 ondelete='CASCADE'搭配，这两样一般可省 , cascade="all, delete-orphan"
+
 
 class Team(db.Model):
     __tablename__ = "teams"
@@ -70,8 +74,8 @@ class Team(db.Model):
     check_e = Column(Time, index=True)
     inv_code = Column(String(16), unique=True)  # 邀请码
     users = db.relationship('User', secondary=t_users, backref='teams', lazy='dynamic')
-    schedules = db.relationship('Schedule', backref='team', lazy='dynamic')  # team.schedules返回查询对象而非结果
-    attendances = db.relationship('Attendance', backref='team', lazy='dynamic')
+    schedules = db.relationship('Schedule', backref='team', **foreign_conf)
+    attendances = db.relationship('Attendance', backref='team', **foreign_conf)
 
     @property
     def tid(self):
@@ -97,7 +101,7 @@ class Schedule(db.Model):
     urgency = Column(TINYINT)  # 对应三种紧急程度, 似乎只支持str；不灵活
     start = Column(Date, nullable=False, index=True)
     end = Column(Date, nullable=False, index=True)
-    team_id = Column(Integer, ForeignKey('teams.id'))
+    team_id = Column(Integer, ForeignKey('teams.id', ondelete='CASCADE'))
 
     def alter(self, kwargs):
         for k, v in kwargs.items():
@@ -112,7 +116,7 @@ class Attendance(db.Model):
     uid = Column(Integer, nullable=False)
     datetime = Column(DateTime, index=True, nullable=False)
     punctual = Column(BOOLEAN, nullable=False)  # 以免将来团队更换打卡时间无从判断
-    team_id = Column(Integer, ForeignKey('teams.id'))
+    team_id = Column(Integer, ForeignKey('teams.id', ondelete='CASCADE'))
 
     def alter(self, kwargs):
         for k, v in kwargs.items():
