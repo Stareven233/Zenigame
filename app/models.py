@@ -10,6 +10,7 @@ from itsdangerous import SignatureExpired, BadSignature
 
 from passlib.apps import mysql_context as pwd_context
 from secrets import token_urlsafe
+from datetime import datetime
 
 
 class User(db.Model):
@@ -76,6 +77,7 @@ class Team(db.Model):
     users = db.relationship('User', secondary=t_users, backref='teams', lazy='dynamic')
     schedules = db.relationship('Schedule', backref='team', **foreign_conf)
     attendances = db.relationship('Attendance', backref='team', **foreign_conf)
+    tasks = db.relationship('Task', backref='team', **foreign_conf)
 
     @property
     def tid(self):
@@ -98,7 +100,7 @@ class Schedule(db.Model):
     __tablename__ = "schedules"
     id = Column(Integer, primary_key=True)
     desc = Column(String(32), nullable=False)
-    urgency = Column(TINYINT)  # 对应三种紧急程度, 似乎只支持str；不灵活
+    urgency = Column(TINYINT)  # 对应三种紧急程度, Enum似乎只支持str；不灵活
     start = Column(Date, nullable=False, index=True)
     end = Column(Date, nullable=False, index=True)
     team_id = Column(Integer, ForeignKey('teams.id', ondelete='CASCADE'))
@@ -123,3 +125,26 @@ class Attendance(db.Model):
             if v is not None:
                 setattr(self, k, v)
         return self
+
+
+class Task(db.Model):
+    __tablename__ = "tasks"
+    id = Column(Integer, primary_key=True)
+    title = Column(String(32), nullable=False)
+    desc = Column(String(64))
+    assignee = Column(Integer, nullable=False)
+    datetime = Column(DateTime, index=True, default=datetime.now)  # 发布日期
+    deadline = Column(DateTime, nullable=False)  # 截止日期
+    finish = Column(BOOLEAN, default=False)
+    team_id = Column(Integer, ForeignKey('teams.id', ondelete='CASCADE'))
+    archives = db.relationship('Archive', backref='task', **foreign_conf)
+
+
+class Archive(db.Model):
+    __tablename__ = "archives"
+    id = Column(Integer, primary_key=True)
+    type = Column(TINYINT, nullable=False)  # 1-3分别代表.md/.rtf/others文件
+    desc = Column(String(64))
+    content = Column(String(16384), nullable=False)  # 前两种直接存，第三种存路径
+    datetime = Column(DateTime, index=True, default=datetime.now)
+    task_id = Column(Integer, ForeignKey('tasks.id', ondelete='CASCADE'))
