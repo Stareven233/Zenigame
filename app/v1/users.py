@@ -149,7 +149,7 @@ class UserAvatarsAPI(Resource):
         ext = extension(avatar.filename)
 
         if f_name == DEFAULT_AVATAR:  # 节约计算，但username不能再变
-            f_name = uuid3(NAMESPACE_URL, user.username).hex.replace('-', '')
+            f_name = uuid3(NAMESPACE_URL, user.username).hex
             f_name = f'{f_name}.{ext}'
         else:
             f_name = f_name[:-3] + ext

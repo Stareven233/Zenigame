@@ -3,7 +3,7 @@ from config import Config, DEFAULT_AVATAR
 
 from sqlalchemy import Column, String, Integer
 from sqlalchemy import ForeignKey, Date, DateTime, Time
-from sqlalchemy.dialects.mysql import TINYINT, BOOLEAN
+from sqlalchemy.dialects.mysql import TINYINT, BOOLEAN, TEXT
 
 from itsdangerous import TimedJSONWebSignatureSerializer as Serializer
 from itsdangerous import SignatureExpired, BadSignature
@@ -133,18 +133,26 @@ class Task(db.Model):
     title = Column(String(32), nullable=False)
     desc = Column(String(64))
     assignee = Column(Integer, nullable=False)
-    datetime = Column(DateTime, index=True, default=datetime.now)  # 发布日期
+    datetime = Column(DateTime, index=True, default=datetime.now)  # 发布/修改日期
     deadline = Column(DateTime, nullable=False)  # 截止日期
     finish = Column(BOOLEAN, default=False)
     team_id = Column(Integer, ForeignKey('teams.id', ondelete='CASCADE'))
     archives = db.relationship('Archive', backref='task', **foreign_conf)
 
+    def alter(self, kwargs):
+        for k, v in kwargs.items():
+            if v is not None:
+                setattr(self, k, v)
+        return self
+
 
 class Archive(db.Model):
     __tablename__ = "archives"
     id = Column(Integer, primary_key=True)
+    name = Column(String(32), nullable=False)
     type = Column(TINYINT, nullable=False)  # 1-3分别代表.md/.rtf/others文件
-    desc = Column(String(64))
-    content = Column(String(16384), nullable=False)  # 前两种直接存，第三种存路径
-    datetime = Column(DateTime, index=True, default=datetime.now)
+    filename = Column(String(40), index=True, nullable=False)
+    datetime = Column(DateTime, default=datetime.now)
+    content = Column(TEXT)  # 前两种直接存，第三种放空
+    # (1074, "Column length too big for column 'content' (max = 16383); use BLOB or TEXT instead")
     task_id = Column(Integer, ForeignKey('tasks.id', ondelete='CASCADE'))

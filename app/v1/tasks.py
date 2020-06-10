@@ -1,18 +1,24 @@
-from . import api
+from flask import g, url_for
 from flask_restful import Resource, reqparse, inputs, marshal, fields
+
+from . import api
 from ..models import Team, Task, Archive
 from .. import db
-from flask import g
 from .decorators import auth
-from .exceptions import ForbiddenError
-from config import TASK_PER_PAGE
+from .exceptions import ForbiddenError, NotFound
+
+from config import TASK_PER_PAGE, Config
 from werkzeug.datastructures import FileStorage
+from uuid import uuid4
+from datetime import datetime
+from os import remove
 
 
 # task提供任务信息，每个task尤其仅有一个执行者，archive存task可能需要上交的文件
 # 由于task已经保存了执行者，则archive仅需返回类型、文档url等
 
 task_fields = {
+    'id': fields.Integer,
     'title': fields.String,
     'desc': fields.String,
     'assignee': fields.Integer,
@@ -20,6 +26,29 @@ task_fields = {
     'deadline': fields.DateTime(dt_format='iso8601'),
     'finish': fields.Boolean
 }
+
+
+class ArchiveUrl(fields.Url):
+    def output(self, key, obj):
+        value = getattr(obj, key if self.attribute is None else self.attribute)
+        if obj.type == 3:
+            self.endpoint = 'main.get_archive'
+        return url_for(self.endpoint, _external=self.absolute, filename=value)
+
+
+class ArchiveItem(fields.Raw):
+    def format(self, value):
+        return marshal(value, archive_fields)
+
+
+archive_fields = {
+    'name': fields.String,
+    'type': fields.Integer,
+    'datetime': fields.DateTime(dt_format='iso8601'),
+    'archive_url': ArchiveUrl('v1.archive', attribute='filename', absolute=False)
+}
+task_detail_fields = task_fields.copy()
+task_detail_fields['archives'] = fields.List(ArchiveItem, attribute='archives')
 
 
 class TaskListAPI(Resource):
@@ -42,6 +71,9 @@ class TaskListAPI(Resource):
         if team.leader != user.id:
             raise ForbiddenError('仅本团队队长可发布工作任务')
 
+        if not team.users.filter_by(id=args.assignee).count():
+            raise ForbiddenError('所选的负责人不是团队成员')
+
         t = Task(**args)
         team.tasks.append(t)
 
@@ -55,8 +87,8 @@ class TaskListAPI(Resource):
         """团队成员查看团队任务"""
         self.reqparser.add_argument('status', type=inputs.int_range(0, 2), default=2, location='args')
         # 未完成、完成、全部 对应 0、1、2
-        self.reqparser.add_argument('self', type=inputs.boolean, default=False, location='args')
-        # 是否仅返回自己的任务
+        self.reqparser.add_argument('uid', type=int, default=0, location='args')
+        # 仅返回该用户的任务，放空(此时为0)则返回全部的
         self.reqparser.add_argument('page', type=int, default=1, location='args')
         args = self.reqparser.parse_args(strict=True)
 
@@ -69,8 +101,9 @@ class TaskListAPI(Resource):
         query = team.tasks
         if args.status in (0, 1,):
             query = query.filter_by(finish=args.status)
-        if args.self:
-            query = query.filter_by(assignee=user.id)
+        if args.uid:
+            # 由于只能给本团队成员发任务，当uid不是该团队成员自然没有记录
+            query = query.filter_by(assignee=args.uid)
 
         pagination = query.order_by(Task.datetime.desc()).paginate(
             page=args.page,
@@ -78,10 +111,23 @@ class TaskListAPI(Resource):
         )
 
         data = {'pages': pagination.pages, 'total': pagination.total,
-                'archives': marshal(pagination.items, task_fields)}
+                'tasks': marshal(pagination.items, task_fields)}
 
         response = {'code': 0, 'message': '', 'data': data}
         return response, 200
+
+
+def store_archive(file):
+    filename = file.filename.rstrip('"')
+    # 很奇怪，当文件名带中文时后缀有多余的"，如 'xxx.doc"'
+    name = uuid4().hex + '.' + filename.rsplit('.', 1)[1]
+    file.save(Config.UPLOADED_FILES_DEST + f'archives/{name}')
+    return name
+
+
+def remove_archive(archives):
+    for a in archives:
+        remove(Config.UPLOADED_FILES_DEST + f'archives/{a.filename}')
 
 
 class TaskAPI(Resource):
@@ -90,16 +136,14 @@ class TaskAPI(Resource):
     def __init__(self):
         self.reqparser = reqparse.RequestParser()
 
-    def store_file(self, file):
-        return ''
-
     def post(self, tid):
         """该任务负责人在此提交文件、设置完成状态"""
         self.reqparser.add_argument('text', type=str, dest='content', location=['json', 'form'])
-        self.reqparser.add_argument('file', type=FileStorage, dest='content', location='files')
+        self.reqparser.add_argument('file', type=FileStorage, location='files')
         self.reqparser.add_argument('type', type=inputs.int_range(1, 3), location=['json', 'form'])
-        # 当不带type参数则表示，没有需要提交的文件
-        self.reqparser.add_argument('desc', type=str, location=['json', 'form'])
+        # 当不带type参数，则表示没有需要提交的文件
+        self.reqparser.add_argument('name', type=str, required=True, location=['json', 'form'])
+        # 文件名，不带后缀（区别于archive.filename，后者是生成的uuid，用于url，且有后缀）
         self.reqparser.add_argument('finish', type=inputs.boolean, required=True, location=['json', 'form'])
         args = self.reqparser.parse_args(strict=True)
 
@@ -110,23 +154,121 @@ class TaskAPI(Resource):
             raise ForbiddenError('仅该任务指定的执行者可提交')
 
         task.finish = args.pop('finish')
+        file = args.pop('file')
 
-        if args.type in (1, 2,):  # 属于.md或.rtf字符串
+        if args.type is None:
+            # 仅更新task.finish时
+            db.session.add(task)
+        else:
+            # 需要提交文档/文件时
+            if args.type in (1, 2,) and args.get('content'):
+                args.filename = uuid4().hex + '.' + ('', 'md', 'rtf')[args.type]
+
+            elif args.type == 3 and file:
+                # 非文本字符串(md/rtf)存于硬盘，文件名写入数据库
+                args.filename = store_archive(file)
+            else:
+                raise ForbiddenError('文件缺失')
+
             a = Archive(**args)
             task.archives.append(a)
-        elif args.type == 3:
-            args.content = self.store_file(args.content)
-            # todo 存储文件，返回存储的path
+            db.session.add_all([a, task])
 
-        task.archives.append(a)
-        db.session.add_all([a, task])
+        db.session.commit()
+        response = {'code': 0, 'message': '', 'data': marshal(task, task_detail_fields)}
+        return response, 201
+
+    def get(self, tid):
+        task = Task.query.get_or_404(tid)
+
+        if not task.team.users.filter_by(id=g.current_user.id).count():
+            raise ForbiddenError('不可查看其他团队的任务')
+
+        response = {'code': 0, 'message': '', 'data': marshal(task, task_detail_fields)}
+        return response, 200
+
+    def patch(self, tid):
+        self.reqparser.add_argument('title', type=str, location='json')
+        self.reqparser.add_argument('desc', type=str, location='json')
+        self.reqparser.add_argument('assignee', type=int, location='json')
+        self.reqparser.add_argument('deadline', type=inputs.datetime_from_iso8601, location='json')
+        args = self.reqparser.parse_args(strict=True)
+
+        task = Task.query.get_or_404(tid)
+        user = g.current_user
+
+        if task.team.leader != user.id:
+            raise ForbiddenError('仅本团队队长可修改工作任务')
+
+        task.alter(args)
+        task.datetime = datetime.now()
+
+        db.session.add(task)
         db.session.commit()
 
-        response = {'code': 0, 'message': '', 'data': marshal(a, task_detail_fields)}
+        response = {'code': 0, 'message': ''}
+        return response, 200
+
+    def delete(self, tid):
+        """注意，删除任务后它关联的文档也会被删除"""
+        task = Task.query.get_or_404(tid)
+
+        if task.team.leader != g.current_user.id:
+            raise ForbiddenError('仅本团队队长可删除工作任务')
+
+        archives = task.archives.filter_by(type=3).all()
+        remove_archive(archives)
+
+        db.session.delete(task)
+        db.session.commit()
+
+        response = {'code': 0, 'message': ''}
         return response, 200
 
 
-# data = {'pages': pagination.pages, 'total': pagination.total,
-#         'archives': marshal(pagination.items, archive_fields)}
-api.add_resource(TaskListAPI, '/teams/<int:tid>/tasks')
-api.add_resource(TaskAPI, '/tasks/<int:tid>')
+class ArchiveAPI(Resource):
+    """
+    仅实现获取与删除，若修改则先删除再重建
+    type=3，即文件类无法在此由get得到，它由nginx代理。但简单起见，文件却是由此处的delete删除...
+    """
+
+    decorators = [auth.login_required]
+
+    def get(self, filename):
+        """
+        关于Archive的属性都能在 'get task' 中获取，故与nginx一样，这里仅返回文本本身
+        若是type=3的文件类则返回空字符串
+        """
+        a = Archive.query.filter(Archive.filename == filename).first()
+
+        if a is None:
+            raise NotFound('该文档不存在')
+
+        return a.content, 200
+
+    def delete(self, filename):
+        a = Archive.query.filter(Archive.filename == filename).first()
+
+        if a is None:
+            raise NotFound('该文档不存在')
+
+        task = a.task
+        user = g.current_user
+
+        if user.id not in (task.team.leader, task.assignee):
+            raise ForbiddenError('仅队长或其发布者可删除')
+
+        task.archives.remove(a)
+        if a.type == 3:
+            remove_archive([a])
+
+        db.session.delete(a)
+        db.session.commit()
+
+        response = {'code': 0, 'message': ''}
+        return response, 200
+
+
+api.add_resource(TaskListAPI, '/teams/<int:tid>/tasks', endpoint='tasks')
+api.add_resource(TaskAPI, '/tasks/<int:tid>', endpoint='task')
+api.add_resource(ArchiveAPI, '/archives/<string:filename>', endpoint='archive')
