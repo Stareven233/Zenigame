@@ -78,6 +78,7 @@ class Team(db.Model):
     schedules = db.relationship('Schedule', backref='team', **foreign_conf)
     attendances = db.relationship('Attendance', backref='team', **foreign_conf)
     tasks = db.relationship('Task', backref='team', **foreign_conf)
+    questionnaires = db.relationship('Questionnaire', backref='team', **foreign_conf)
 
     @property
     def tid(self):
@@ -136,8 +137,8 @@ class Task(db.Model):
     datetime = Column(DateTime, index=True, default=datetime.now)  # 发布/修改日期
     deadline = Column(DateTime, nullable=False)  # 截止日期
     finish = Column(BOOLEAN, default=False)
-    team_id = Column(Integer, ForeignKey('teams.id', ondelete='CASCADE'))
     archives = db.relationship('Archive', backref='task', **foreign_conf)
+    team_id = Column(Integer, ForeignKey('teams.id', ondelete='CASCADE'))
 
     def alter(self, kwargs):
         for k, v in kwargs.items():
@@ -156,3 +157,32 @@ class Archive(db.Model):
     content = Column(TEXT)  # 前两种直接存，第三种放空
     # (1074, "Column length too big for column 'content' (max = 16383); use BLOB or TEXT instead")
     task_id = Column(Integer, ForeignKey('tasks.id', ondelete='CASCADE'))
+
+
+class Questionnaire(db.Model):
+    __tablename__ = "questionnaires"
+    id = Column(Integer, primary_key=True)
+    title = Column(String(32), nullable=False)
+    desc = Column(String(128))
+    datetime = Column(DateTime, default=datetime.now)
+    deadline = Column(DateTime, nullable=False)
+    questions = db.relationship('QQuestion', backref='questionnaire', **foreign_conf)
+    team_id = Column(Integer, ForeignKey('teams.id', ondelete='CASCADE'))
+
+
+class QQuestion(db.Model):
+    __tablename__ = "q_questions"
+    id = Column(Integer, primary_key=True)
+    qid = Column(TINYINT, nullable=False)  # 在对应问卷中的题号
+    desc = Column(String(32), nullable=False)  # 题干
+    type = Column(TINYINT, nullable=False)  # 1-3分别代表单选、多选、简答[简答无选项]
+    options = db.relationship('QOption', backref='question', **foreign_conf)
+    questionnaire_id = Column(Integer, ForeignKey('questionnaires.id', ondelete='CASCADE'))
+
+
+class QOption(db.Model):
+    __tablename__ = "q_options"
+    id = Column(Integer, primary_key=True)
+    oid = Column(TINYINT, nullable=False)  # 在对应题目中的选项序号
+    desc = Column(String(32), nullable=False)
+    question_id = Column(Integer, ForeignKey('q_questions.id', ondelete='CASCADE'))

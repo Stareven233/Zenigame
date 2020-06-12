@@ -11,7 +11,7 @@ from config import TASK_PER_PAGE, Config
 from werkzeug.datastructures import FileStorage
 from uuid import uuid4
 from datetime import datetime
-from os import remove
+from os import remove, path
 
 
 # task提供任务信息，每个task尤其仅有一个执行者，archive存task可能需要上交的文件
@@ -127,7 +127,9 @@ def store_archive(file):
 
 def remove_archive(archives):
     for a in archives:
-        remove(Config.UPLOADED_FILES_DEST + f'archives/{a.filename}')
+        p = Config.UPLOADED_FILES_DEST + f'archives/{a.filename}'
+        if path.isfile(p):
+            remove(p)
 
 
 class TaskAPI(Resource):
@@ -270,5 +272,5 @@ class ArchiveAPI(Resource):
 
 
 api.add_resource(TaskListAPI, '/teams/<int:tid>/tasks', endpoint='tasks')
-api.add_resource(TaskAPI, '/tasks/<int:tid>', endpoint='task')
+api.add_resource(TaskAPI, '/tasks', endpoint='task')
 api.add_resource(ArchiveAPI, '/archives/<string:filename>', endpoint='archive')
