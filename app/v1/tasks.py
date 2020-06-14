@@ -273,5 +273,5 @@ class ArchiveAPI(Resource):
 
 
 api.add_resource(TaskListAPI, '/teams/<int:tid>/tasks', endpoint='tasks')
-api.add_resource(TaskAPI, '/tasks', endpoint='task')
+api.add_resource(TaskAPI, '/tasks/<int:tid>', endpoint='task')
 api.add_resource(ArchiveAPI, '/archives/<string:filename>', endpoint='archive')
