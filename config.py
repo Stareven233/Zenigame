@@ -16,4 +16,4 @@ class Config(object):
     # SQLALCHEMY_DATABASE_URI = f'mysql+mysqlconnector://root:{getenv("DATABASE_PW")}@localhost:3306/Zenigame'
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     UPLOADED_FILES_DEST = dirname(__file__)+sep+'app'+sep+'static'+sep
-    MAX_CONTENT_LENGTH = 2 * 1024 * 1024
+    # MAX_CONTENT_LENGTH = 2 * 1024 * 1024  # 为了上传办公文件不能只限制2m，具体大小由nginx指定

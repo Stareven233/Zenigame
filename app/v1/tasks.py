@@ -45,10 +45,11 @@ archive_fields = {
     'name': fields.String,
     'type': fields.Integer,
     'datetime': fields.DateTime(dt_format='iso8601'),
-    'archive_url': ArchiveUrl('v1.archive', attribute='filename', absolute=False)
+    'archive_url': ArchiveUrl('v1.archive', attribute='filename', absolute=True)
 }
 task_detail_fields = task_fields.copy()
 task_detail_fields['archives'] = fields.List(ArchiveItem, attribute='archives')
+# todo 如果前端没用到detail_fields中重复的信息，就去掉，仅返回archives
 
 
 class TaskListAPI(Resource):
@@ -144,7 +145,7 @@ class TaskAPI(Resource):
         self.reqparser.add_argument('file', type=FileStorage, location='files')
         self.reqparser.add_argument('type', type=inputs.int_range(1, 3), location=['json', 'form'])
         # 当不带type参数，则表示没有需要提交的文件
-        self.reqparser.add_argument('name', type=str, required=True, location=['json', 'form'])
+        self.reqparser.add_argument('name', type=str, location=['json', 'form'])
         # 文件名，不带后缀（区别于archive.filename，后者是生成的uuid，用于url，且有后缀）
         self.reqparser.add_argument('finish', type=inputs.boolean, required=True, location=['json', 'form'])
         args = self.reqparser.parse_args(strict=True)

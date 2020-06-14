@@ -150,7 +150,7 @@ class Task(db.Model):
 class Archive(db.Model):
     __tablename__ = "archives"
     id = Column(Integer, primary_key=True)
-    name = Column(String(32), nullable=False)
+    name = Column(String(32))
     type = Column(TINYINT, nullable=False)  # 1-3分别代表.md/.rtf/others文件
     filename = Column(String(40), index=True, nullable=False)
     datetime = Column(DateTime, default=datetime.now)
@@ -167,6 +167,7 @@ class Questionnaire(db.Model):
     datetime = Column(DateTime, default=datetime.now)
     deadline = Column(DateTime, nullable=False)
     questions = db.relationship('QQuestion', backref='questionnaire', **foreign_conf)
+    records = db.relationship('QRecord', backref='questionnaire', **foreign_conf)
     team_id = Column(Integer, ForeignKey('teams.id', ondelete='CASCADE'))
 
 
@@ -186,3 +187,26 @@ class QOption(db.Model):
     oid = Column(TINYINT, nullable=False)  # 在对应题目中的选项序号
     desc = Column(String(32), nullable=False)
     question_id = Column(Integer, ForeignKey('q_questions.id', ondelete='CASCADE'))
+
+
+class QRecord(db.Model):
+    __tablename__ = "q_records"
+    id = Column(Integer, primary_key=True)
+    username = Column(String(16), nullable=False)
+    datetime = Column(DateTime, default=datetime.now)
+    answers = db.relationship('QAnswer', backref='record', **foreign_conf)
+    questionnaire_id = Column(Integer, ForeignKey('questionnaires.id', ondelete='CASCADE'))
+    # 用于记录某个用户的一次问卷填写结果
+    # 直接让question与answer一对多也行，但多个record方便后续拓展
+
+
+class QAnswer(db.Model):
+    __tablename__ = "q_answers"
+    id = Column(Integer, primary_key=True)
+    qid = Column(TINYINT, nullable=False)
+    # 在对应问卷中的题号
+    type = Column(TINYINT, nullable=False)
+    ans = Column(String(512), nullable=False)
+    # 三种题型的结果(int int-list str)存为str，毕竟填完不再修改
+    # 若简答题可选就提交空字符串
+    record_id = Column(Integer, ForeignKey('q_records.id', ondelete='CASCADE'))
