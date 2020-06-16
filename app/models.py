@@ -78,6 +78,7 @@ class Team(db.Model):
     schedules = db.relationship('Schedule', backref='team', **foreign_conf)
     attendances = db.relationship('Attendance', backref='team', **foreign_conf)
     tasks = db.relationship('Task', backref='team', **foreign_conf)
+    archives = db.relationship('Archive', backref='team', lazy='dynamic')
     questionnaires = db.relationship('Questionnaire', backref='team', **foreign_conf)
     logs = db.relationship('Log', backref='team', **foreign_conf)
 
@@ -158,6 +159,7 @@ class Archive(db.Model):
     content = Column(TEXT)  # 前两种直接存，第三种放空
     # (1074, "Column length too big for column 'content' (max = 16383); use BLOB or TEXT instead")
     task_id = Column(Integer, ForeignKey('tasks.id', ondelete='CASCADE'))
+    team_id = Column(Integer, ForeignKey('teams.id'))
 
 
 class Questionnaire(db.Model):

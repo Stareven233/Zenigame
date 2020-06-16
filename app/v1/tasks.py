@@ -7,7 +7,7 @@ from .. import db
 from .decorators import auth
 from .exceptions import ForbiddenError, NotFound
 
-from config import TASK_PER_PAGE, Config
+from config import TASK_PER_PAGE, FILE_PER_PAGE, Config
 from werkzeug.datastructures import FileStorage
 from uuid import uuid4
 from datetime import datetime
@@ -31,9 +31,8 @@ task_fields = {
 class ArchiveUrl(fields.Url):
     def output(self, key, obj):
         value = getattr(obj, key if self.attribute is None else self.attribute)
-        if obj.type == 3:
-            self.endpoint = 'main.get_archive'
-        return url_for(self.endpoint, _external=self.absolute, filename=value)
+        endpoint = ('v1.archive', 'main.get_archive')[obj.type == 3]
+        return url_for(endpoint, _external=self.absolute, filename=value)
 
 
 class ArchiveItem(fields.Raw):
@@ -45,7 +44,7 @@ archive_fields = {
     'name': fields.String,
     'type': fields.Integer,
     'datetime': fields.DateTime(dt_format='iso8601'),
-    'archive_url': ArchiveUrl('v1.archive', attribute='filename', absolute=True)
+    'archive_url': ArchiveUrl(attribute='filename', absolute=True)
 }
 task_detail_fields = task_fields.copy()
 task_detail_fields['archives'] = fields.List(ArchiveItem, attribute='archives')
@@ -185,8 +184,14 @@ class TaskAPI(Resource):
                 raise ForbiddenError('文件缺失')
 
             a = Archive(**args)
+            task.team.archives.append(a)
             task.archives.append(a)
-            db.session.add_all([a, task])
+            db.session.add(a)  # 像这里有外键约束，不必add task
+
+        if task.finish:
+            log = Log(uid=user.id, desc=f'完成了任务: {task.title}')
+            task.team.logs.append(log)
+            db.session.add(log)
 
         if task.finish:
             log = Log(uid=user.id, desc=f'完成了任务: {task.title}')
@@ -253,6 +258,34 @@ class TaskAPI(Resource):
         return response, 200
 
 
+class ArchiveListAPI(Resource):
+    decorators = [auth.login_required]
+
+    def __init__(self):
+        self.reqparser = reqparse.RequestParser()
+        self.reqparser.add_argument('page', type=int, default=1, location='args')
+
+    def get(self, tid):
+        """获取某个团队的所有文件，分页"""
+
+        args = self.reqparser.parse_args(strict=True)
+        team = Team.query.get_or_404(tid)
+
+        if not db.session.query(team.users.filter_by(id=g.current_user.id).exists()).scalar():
+            raise ForbiddenError('不可查看其他团队的文件')
+
+        pagination = team.archives.order_by(Archive.datetime.desc()).paginate(
+            page=args.page,
+            per_page=FILE_PER_PAGE
+        )
+
+        data = {'pages': pagination.pages, 'total': pagination.total,
+                'archives': marshal(pagination.items, archive_fields)}
+
+        response = {'code': 0, 'message': '', 'data': data}
+        return response, 200
+
+
 class ArchiveAPI(Resource):
     """
     仅实现获取与删除，若修改则先删除再重建
@@ -266,16 +299,17 @@ class ArchiveAPI(Resource):
         关于Archive的属性都能在 'get task' 中获取，故与nginx一样，这里仅返回文本本身
         若是type=3的文件类则返回空字符串
         """
-        a = Archive.query.filter(Archive.filename == filename).first()
 
+        a = Archive.query.filter(Archive.filename == filename).first()  # todo 改成exists
         if a is None:
             raise NotFound('该文档不存在')
 
         return a.content, 200
 
     def delete(self, filename):
-        a = Archive.query.filter(Archive.filename == filename).first()
+        """按文件名删除某个文档/文件"""
 
+        a = Archive.query.filter(Archive.filename == filename).first()
         if a is None:
             raise NotFound('该文档不存在')
 
@@ -298,4 +332,5 @@ class ArchiveAPI(Resource):
 
 api.add_resource(TaskListAPI, '/teams/<int:tid>/tasks', endpoint='tasks')
 api.add_resource(TaskAPI, '/tasks/<int:tid>', endpoint='task')
+api.add_resource(ArchiveListAPI, '/teams/<int:tid>/archives', endpoint='archives')
 api.add_resource(ArchiveAPI, '/archives/<string:filename>', endpoint='archive')
