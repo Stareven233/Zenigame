@@ -198,6 +198,11 @@ class TaskAPI(Resource):
             task.team.logs.append(log)
             db.session.add(log)
 
+        if task.finish:
+            log = Log(uid=user.id, desc=f'完成了任务: {task.title}')
+            task.team.logs.append(log)
+            db.session.add(log)
+
         db.session.commit()
         response = {'code': 0, 'message': '', 'data': marshal(task, task_detail_fields)}
         return response, 201
