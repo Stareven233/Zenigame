@@ -21,4 +21,4 @@ api = Api(v1)
 
 
 from . import users, teams, errors
-from . import schedules, attendances, tasks, questionnaires
+from . import schedules, attendances, tasks, questionnaires, logs

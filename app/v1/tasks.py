@@ -2,7 +2,7 @@ from flask import g, url_for
 from flask_restful import Resource, reqparse, inputs, marshal, fields
 
 from . import api
-from ..models import Team, Task, Archive
+from ..models import Team, Task, Archive, Log
 from .. import db
 from .decorators import auth
 from .exceptions import ForbiddenError, NotFound
@@ -60,6 +60,7 @@ class TaskListAPI(Resource):
 
     def post(self, tid):
         """团队队长向特定成员发布工作任务"""
+
         self.reqparser.add_argument('title', type=str, required=True, location='json')
         self.reqparser.add_argument('desc', type=str, location='json')
         self.reqparser.add_argument('assignee', type=int, required=True, location='json')
@@ -72,13 +73,17 @@ class TaskListAPI(Resource):
         if team.leader != user.id:
             raise ForbiddenError('仅本团队队长可发布工作任务')
 
-        if not team.users.filter_by(id=args.assignee).count():
+        # if not team.users.filter_by(id=args.assignee).count():
+        if not db.session.query(team.users.filter_by(id=args.assignee).exists()).scalar():
             raise ForbiddenError('所选的负责人不是团队成员')
 
         t = Task(**args)
         team.tasks.append(t)
 
-        db.session.add_all([t, team])
+        log = Log(uid=user.id, desc=f'创建了任务: {args.title}')
+        team.logs.append(log)
+
+        db.session.add_all((t, log,))
         db.session.commit()
 
         response = {'code': 0, 'message': '', 'data': marshal(t, task_fields)}
@@ -86,6 +91,7 @@ class TaskListAPI(Resource):
 
     def get(self, tid):
         """团队成员查看团队任务"""
+
         self.reqparser.add_argument('status', type=inputs.int_range(0, 2), default=2, location='args')
         # 未完成、完成、全部 对应 0、1、2
         self.reqparser.add_argument('uid', type=int, default=0, location='args')
@@ -96,7 +102,8 @@ class TaskListAPI(Resource):
         team = Team.query.get_or_404(tid)
         user = g.current_user
 
-        if not team.users.filter_by(id=user.id).count():
+        # if not team.users.filter_by(id=user.id).count():
+        if not db.session.query(team.users.filter_by(id=user.id).exists()).scalar():
             raise ForbiddenError('不可查看其他团队的任务')
 
         query = team.tasks
@@ -141,6 +148,7 @@ class TaskAPI(Resource):
 
     def post(self, tid):
         """该任务负责人在此提交文件、设置完成状态"""
+
         self.reqparser.add_argument('text', type=str, dest='content', location=['json', 'form'])
         self.reqparser.add_argument('file', type=FileStorage, location='files')
         self.reqparser.add_argument('type', type=inputs.int_range(1, 3), location=['json', 'form'])
@@ -155,6 +163,9 @@ class TaskAPI(Resource):
 
         if task.assignee != user.id:
             raise ForbiddenError('仅该任务指定的执行者可提交')
+
+        if task.finish:
+            raise ForbiddenError('该任务已完成，不可再提交')
 
         task.finish = args.pop('finish')
         file = args.pop('file')
@@ -177,6 +188,11 @@ class TaskAPI(Resource):
             task.archives.append(a)
             db.session.add_all([a, task])
 
+        if task.finish:
+            log = Log(uid=user.id, desc=f'完成了任务: {task.title}')
+            task.team.logs.append(log)
+            db.session.add(log)
+
         db.session.commit()
         response = {'code': 0, 'message': '', 'data': marshal(task, task_detail_fields)}
         return response, 201
@@ -184,7 +200,7 @@ class TaskAPI(Resource):
     def get(self, tid):
         task = Task.query.get_or_404(tid)
 
-        if not task.team.users.filter_by(id=g.current_user.id).count():
+        if not db.session.query(task.team.users.filter_by(id=g.current_user.id).exists()).scalar():
             raise ForbiddenError('不可查看其他团队的任务')
 
         response = {'code': 0, 'message': '', 'data': marshal(task, task_detail_fields)}
@@ -206,7 +222,10 @@ class TaskAPI(Resource):
         task.alter(args)
         task.datetime = datetime.now()
 
-        db.session.add(task)
+        log = Log(uid=user.id, desc=f'修改了任务: {task.title}')
+        task.team.logs.append(log)
+
+        db.session.add_all((task, log))
         db.session.commit()
 
         response = {'code': 0, 'message': ''}
@@ -214,6 +233,7 @@ class TaskAPI(Resource):
 
     def delete(self, tid):
         """注意，删除任务后它关联的文档也会被删除"""
+
         task = Task.query.get_or_404(tid)
 
         if task.team.leader != g.current_user.id:
@@ -222,7 +242,11 @@ class TaskAPI(Resource):
         archives = task.archives.filter_by(type=3).all()
         remove_archive(archives)
 
+        log = Log(uid=g.current_user.id, desc=f'删除了任务: {task.title}')
+        task.team.logs.append(log)
+
         db.session.delete(task)
+        db.session.add(log)
         db.session.commit()
 
         response = {'code': 0, 'message': ''}

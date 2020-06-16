@@ -4,7 +4,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy import exists
 
 from . import api
-from ..models import Team, Questionnaire, QQuestion, QOption
+from ..models import Team, Questionnaire, QQuestion, QOption, Log
 from ..models import QRecord, QAnswer
 from .. import db
 from .decorators import auth
@@ -85,6 +85,7 @@ class QuestionnaireListAPI(Resource):
 
     def post(self, tid):
         """团队队长发布团队调查问卷"""
+
         self.reqparser.add_argument('title', type=str, required=True, location='json')
         self.reqparser.add_argument('desc', type=str, location='json')
         self.reqparser.add_argument('deadline', type=inputs.datetime_from_iso8601, required=True, location='json')
@@ -127,11 +128,17 @@ class QuestionnaireListAPI(Resource):
             ee = "缺失参数: " + re.findall(r"Column \\\'(\w+)\\\'", repr(e))[0]
             raise BadRequestError(ee)
 
+        log = Log(uid=g.current_user.id, desc=f'创建了问卷: {questionnaire.title}')
+        team.logs.append(log)
+        db.session.add(log)
+        db.session.commit()  # 上方为了验证参数要跟这里分开
+
         response = {'code': 0, 'message': '', 'data': marshal(questionnaire, questionnaire_fields)}
         return response, 201
 
     def get(self, tid):
         """团队成员查看团队问卷列表"""
+
         self.reqparser.add_argument('page', type=int, default=1, location='args')
         args = self.reqparser.parse_args(strict=True)
 
@@ -192,7 +199,8 @@ class QuestionnaireAPI(Resource):
         if datetime.now() > questionnaire.deadline:
             raise ForbiddenError('已超过问卷截止时间')
 
-        if db.session.query(exists().where(QRecord.username == user.username)).scalar():
+        # if db.session.query(exists().where(QRecord.questionnaire_id==qid, QRecord.username==user.username)).scalar():
+        if db.session.query(questionnaire.records.filter_by(username=user.username).exists()).scalar():
             raise ForbiddenError('你已填写了该问卷')
 
         record = QRecord(username=user.username)
@@ -231,7 +239,11 @@ class QuestionnaireAPI(Resource):
         team = questionnaire.team
         team.questionnaires.remove(questionnaire)
 
+        log = Log(uid=user.id, desc=f'删除了问卷: {questionnaire.title}')
+        team.logs.append(log)
+
         db.session.delete(questionnaire)
+        db.session.add(log)
         db.session.commit()
 
         response = {'code': 0, 'message': ''}
