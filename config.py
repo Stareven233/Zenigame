@@ -8,6 +8,7 @@ DEFAULT_AVATAR = '0.jpg'
 ALLOWED_IMG_EXT = 'jpg jpeg png'.split()
 TASK_PER_PAGE = 10
 QUESTIONNAIRE_PER_PAGE = 10
+LOG_PER_PAGE = 5
 
 
 class Config(object):

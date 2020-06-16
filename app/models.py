@@ -79,6 +79,7 @@ class Team(db.Model):
     attendances = db.relationship('Attendance', backref='team', **foreign_conf)
     tasks = db.relationship('Task', backref='team', **foreign_conf)
     questionnaires = db.relationship('Questionnaire', backref='team', **foreign_conf)
+    logs = db.relationship('Log', backref='team', **foreign_conf)
 
     @property
     def tid(self):
@@ -210,3 +211,12 @@ class QAnswer(db.Model):
     # 三种题型的结果(int int-list str)存为str，毕竟填完不再修改
     # 若简答题可选就提交空字符串
     record_id = Column(Integer, ForeignKey('q_records.id', ondelete='CASCADE'))
+
+
+class Log(db.Model):
+    __tablename__ = "logs"
+    id = Column(Integer, primary_key=True)
+    uid = Column(Integer, nullable=False)  # 操作发出者
+    desc = Column(String(64), nullable=False)
+    datetime = Column(DateTime, default=datetime.now)
+    team_id = Column(Integer, ForeignKey('teams.id', ondelete='CASCADE'))
