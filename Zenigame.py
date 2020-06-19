@@ -1,4 +1,4 @@
-from app import create_app, create_db_table
+from app import create_app, socketio
 from flask_cors import CORS
 
 app = create_app()
@@ -8,5 +8,5 @@ CORS(app, supports_credentials=True)
 
 if __name__ == '__main__':
     # create_db_table(app)
-    app.run(host='0.0.0.0', debug=False)
+    socketio.run(app, host='0.0.0.0', debug=False)
     # app.run(debug=True)

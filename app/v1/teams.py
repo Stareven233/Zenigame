@@ -131,7 +131,7 @@ class TeamAPI(Resource):
             db.session.add(team)
             db.session.commit()
         else:
-            raise BadRequestError('不可操作其他团队成员')
+            raise BadRequestError('没有权限操作其他团队成员')
 
         response = {'code': 0, 'message': ''}
         return response, 200

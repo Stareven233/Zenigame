@@ -1,12 +1,15 @@
 from flask import Flask
-from config import Config, ALLOWED_IMG_EXT
 from flask_sqlalchemy import SQLAlchemy
 from flask_uploads import UploadSet, configure_uploads
+from flask_socketio import SocketIO
+
 from json import dumps
 from functools import partial
+from config import Config, ALLOWED_IMG_EXT
 
 json_config = {'ensure_ascii': False, 'indent': None, 'separators': (',', ':')}
 compact_dumps = partial(dumps, **json_config)
+socketio = SocketIO()
 
 
 class CustomUpSet(UploadSet):
@@ -23,6 +26,7 @@ def create_app():
     app.config.from_object(Config)
     db.init_app(app)
     configure_uploads(app, up_files)
+    socketio.init_app(app, async_mode='eventlet', cors_allowed_origins='*')
     from .v1 import v1  # 不能在db初始化前，因为v1有用到db
     app.register_blueprint(v1, url_prefix='/v1')
     from .main import main
