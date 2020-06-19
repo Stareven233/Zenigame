@@ -1,10 +1,12 @@
-from . import api
+from flask import g
 from flask_restful import Resource, reqparse, inputs, marshal, fields
+
+from . import api
 from ..models import Attendance, Team
 from .. import db
-from flask import g
 from .decorators import auth
 from .exceptions import ForbiddenError
+
 from datetime import datetime
 from sqlalchemy import extract
 
@@ -31,7 +33,7 @@ class AttendanceListAPI(Resource):
         user = g.current_user
         d = datetime.now()
 
-        if not team.users.filter_by(id=user.id).first():
+        if not db.session.query(team.users.filter_by(id=user.id).exists()).scalar():
             raise ForbiddenError('仅本团队成员可打卡')
 
         if team.attendances.filter(
@@ -71,7 +73,7 @@ class AttendanceListAPI(Resource):
         team = Team.query.get_or_404(tid)
         user = g.current_user
 
-        if not team.users.filter_by(id=user.id).first():
+        if not db.session.query(team.users.filter_by(id=user.id).exists()).scalar():
             raise ForbiddenError('不可获取其他团队的打卡记录')
 
         date_tuple = args.date.timetuple()[:3]
@@ -90,7 +92,7 @@ class AttendanceListAPI(Resource):
             data = [marshal(a, attendance_fields) for a in query]
 
         else:
-            # 一般成员查看团队简要信息
+            # 一般成员查看团队简要信息: 已打卡与准时的人数
             punctual = query.filter_by(punctual=True).count()
             data = {'present': query.count(), 'punctual': punctual}
 

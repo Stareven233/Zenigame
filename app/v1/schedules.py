@@ -2,7 +2,7 @@ from flask import g
 from flask_restful import Resource, reqparse, inputs, marshal, fields
 
 from . import api
-from ..models import Schedule, Team, Log
+from ..models import Schedule, Team, Log, object_alter
 from .. import db
 from .decorators import auth
 from .exceptions import ForbiddenError
@@ -72,9 +72,8 @@ class ScheduleListAPI(Resource):
 
         schedules = team.schedules.filter(not_(or_(Schedule.start > end, Schedule.end < start)))
         # 筛选出日期跨度与该月有交集的所有日程
-        data = [marshal(s, schedule_fields) for s in schedules]
 
-        response = {'code': 0, 'message': '', 'data': data}
+        response = {'code': 0, 'message': '', 'data': marshal(schedules.all(), schedule_fields)}
         return response, 200
 
 
@@ -96,8 +95,9 @@ class ScheduleAPI(Resource):
             raise ForbiddenError('仅队长可修改日程')
 
         log = Log(uid=g.current_user.id, desc=f'修改了日程: {schedule.desc}')
-        schedule.alter(args)  # todo 实际上要考虑到日程名称修改后log记录问题
+        object_alter(schedule, args)
         schedule.team.logs.append(log)
+        # 实际上要考虑到日程名称修改后log记录不能改变的问题
 
         db.session.add_all((schedule, log))
         db.session.commit()

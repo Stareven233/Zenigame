@@ -1,15 +1,18 @@
-from . import api, v1
-from flask_restful import Resource, reqparse, fields, marshal, inputs
-from ..models import User
 from flask import g, url_for
+from flask_restful import Resource, reqparse, fields, marshal, inputs
+from flask_uploads import extension
+
+from . import api
+from ..models import User, object_alter
 from .. import db, up_files
 from .decorators import auth
 from .exceptions import UserAlreadyExistsError, IncorrectPasswordError
+
 from werkzeug.datastructures import FileStorage
 from os import remove
-from flask_uploads import extension
 from config import Config, DEFAULT_AVATAR
 from uuid import uuid3, NAMESPACE_URL
+from sqlalchemy import or_
 
 
 class TeamItem(fields.Raw):
@@ -78,7 +81,8 @@ class UserListAPI(Resource):
         password = args['password']
         name = args['name'] or username
 
-        if User.query.filter_by(username=username).first() or User.query.filter_by(email=email).first():
+        if db.session.query(User.query.filter(or_(User.username == username, User.email == email)).exists()).scalar():
+            # 且filter内or_不可用python运算符 or 替代
             raise UserAlreadyExistsError()
 
         user = User(email=email, username=username, name=name)
@@ -90,14 +94,15 @@ class UserListAPI(Resource):
         return response, 201
 
     def patch(self):  # 登录即可确认身份，故不需id
-        """修改用户名"""
+        """修改用户名、邮箱"""
+
         email_t = inputs.regex(r'^[0-9a-zA-Z_-]+@[0-9a-zA-Z_-]+(?:.[0-9a-zA-Z_-]+){1,2}$')
         self.reqparse.add_argument('name', type=str, required=False, location='json')
         self.reqparse.add_argument('email', type=email_t, required=False, location='json')
         args = self.reqparse.parse_args(strict=True)
 
         user = g.current_user
-        user.alter(args)
+        object_alter(user, args)
         db.session.add(user)
         db.session.commit()
 
@@ -117,6 +122,7 @@ class UserPwdAPI(Resource):
     def put(self):
         args = self.reqparse.parse_args(strict=True)
         user = g.current_user
+
         if not user.verify_password(args['password']):
             raise IncorrectPasswordError()
 
@@ -134,7 +140,6 @@ class UserAvatarsAPI(Resource):
     def __init__(self):
         self.reqparse = reqparse.RequestParser()
         self.reqparse.add_argument('avatar', type=FileStorage, required=True, location='files')
-        # self.reqparse.add_argument('Content-Length', type=int, required=False, location='headers')
         super().__init__()
 
     def put(self):

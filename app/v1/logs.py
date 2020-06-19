@@ -1,5 +1,5 @@
 from flask import g
-from flask_restful import Resource, reqparse, inputs, marshal, fields
+from flask_restful import Resource, reqparse, marshal, fields
 
 from . import api
 from ..models import Team, Log

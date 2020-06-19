@@ -6,12 +6,13 @@ from config import GLOBAL_ERROR_CODE
 
 class CustomApi(Api):
     def error_router(self, original_handler, e):
-        check = e.__str__()[:3] not in GLOBAL_ERROR_CODE or isinstance(e, MyApiError)
+        # 保证errors.py里的处理器会被使用
+        check = (e.__str__()[:3] not in GLOBAL_ERROR_CODE) or isinstance(e, MyApiError)
         if self._has_fr_route() and check:
             try:
                 return self.handle_error(e)
             except Exception:
-                pass  # Fall through to original handler
+                pass
         return original_handler(e)
 
 

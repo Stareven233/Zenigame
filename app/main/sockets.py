@@ -2,18 +2,10 @@ from flask_socketio import Namespace, join_room, leave_room, emit, rooms
 from .. import socketio, db
 from ..models import Team, User
 
-r_members = socketio.server.manager.rooms
-
 
 class ChatRoom(Namespace):
     def __init__(self, namespace):
         super().__init__(namespace)
-
-    # def on_connect(self):
-        # print('连接上了', request.sid)
-
-    # def on_disconnect(self):
-        # print('关闭了连接', request.sid)
 
     def on_join(self, data):
         tid = data.pop('tid', 0)
@@ -24,17 +16,14 @@ class ChatRoom(Namespace):
             return
 
         join_room(tid)
-        # print('有人加入了！')
-
-        # emit('onlineCount', {'online': g.tid}, room=request.sid)
         emit('enter', {'uid': user.id}, broadcast=True, room=tid)
 
     def on_leave(self, data):
         tid = data.pop('tid', 0)
         if tid not in rooms():
             return
+
         leave_room(tid)
-        # print('有人离开了！')
         emit('exit', {'uid': data.get('uid')}, broadcast=True, room=tid)
 
     def on_chat(self, data):
@@ -43,7 +32,6 @@ class ChatRoom(Namespace):
         tid = data.get('tid', 0)
         if tid not in rooms():
             return
-        # print('有人在聊天！')
         emit('chat', data, broadcast=True, room=tid)  # , include_self=False
 
 

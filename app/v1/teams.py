@@ -1,12 +1,13 @@
-from . import api
-from flask_restful import Resource, reqparse, fields, marshal
-from datetime import time
-from ..models import Team, User
 from flask import g, url_for
+from flask_restful import Resource, reqparse, fields, marshal
+
+from . import api
 from .. import db
+from ..models import Team, User, object_alter
 from .decorators import auth
 from .exceptions import BadRequestError, ForbiddenError
 
+from datetime import time
 
 user_fields = {
     'id': fields.Integer,
@@ -39,7 +40,8 @@ team_fields = {
 
 
 def time_check(s, e):
-    """二者间有大小关系，不可直接 flask_restful.inputs.int_range """
+    """验证两个time对象/时间字符串是否符合要求"""
+    # 二者间有大小关系，不可直接 flask_restful.inputs.int_range
     try:
         if not isinstance(s, time):
             s = time(*map(int, s.split(':')))
@@ -98,11 +100,13 @@ class TeamAPI(Resource):
         super().__init__()
 
     def post(self, tid):
-        """对某个团队队长主动拉人/踢人 他人退出 及队长职位转让
+        """
+        对某个团队队长主动拉人/踢人 他人退出 及队长职位转让
         action: 1-加入 2-退出 3-转移职务
         uid: 被操作者，允许操作自己
         注意：加入只能由队长拉入或通过邀请码，不能直接加入
         """
+
         args = self.reqparse.parse_args(strict=True)
         action, uid = args['action'], args['uid']
 
@@ -113,11 +117,13 @@ class TeamAPI(Resource):
         op_admin = operator.id == team.leader
         op_self = operator.id == user.id
 
-        if op_admin and op_self:  # 队长操作自己
+        if op_admin and op_self:
+            # 队长操作自己
             raise BadRequestError('队长不可加入/退出，请先转交队长职位')
 
-        if op_admin or op_self:  # 队长操作他人 / 他人操作自己
-            joined = bool(team.users.filter_by(id=user.id).first())  # 是否已加入该团队
+        if op_admin or op_self:
+            # 队长操作他人 / 他人操作自己
+            joined = db.session.query(team.users.filter_by(id=user.id).exists()).scalar()  # 是否已加入该团队
 
             if action == 1 and op_admin and not joined:
                 team.users.append(user)
@@ -152,7 +158,7 @@ class TeamAPI(Resource):
         if s and e:
             args.check_s, args.check_e = time_check(s, e)
 
-        team.alter(args)
+        object_alter(team, args)
         db.session.add(team)
         db.session.commit()
 
@@ -162,8 +168,10 @@ class TeamAPI(Resource):
     def delete(self, tid):
         team = Team.query.get_or_404(tid)
         operator = g.current_user
+
         if operator.id != team.leader:
             raise BadRequestError('仅队长可解散团队')
+
         db.session.delete(team)
         db.session.commit()
 
@@ -172,7 +180,8 @@ class TeamAPI(Resource):
 
     def get(self, tid):
         team = Team.query.get_or_404(tid)
-        if not team.users.filter_by(id=g.current_user.id).first():
+
+        if not db.session.query(team.users.filter_by(id=g.current_user.id).exists()).scalar():
             raise ForbiddenError('仅成员可查看团队信息')
 
         response = {'code': 0, 'message': '', 'data': marshal(team, team_fields)}
@@ -194,11 +203,10 @@ class TeamJoinAPI(Resource):
         if team is None:
             raise BadRequestError('邀请码错误或过期')
 
-        if not team.users.filter_by(id=g.current_user.id).first():
+        if not db.session.query(team.users.filter_by(id=g.current_user.id).exists()).scalar():
             team.users.append(g.current_user)
-
-        db.session.add(team)
-        db.session.commit()
+            db.session.add(team)
+            db.session.commit()
 
         response = {'code': 0, 'message': ''}
         return response, 200

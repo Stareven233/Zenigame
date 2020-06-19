@@ -10,7 +10,15 @@ from itsdangerous import SignatureExpired, BadSignature
 
 from passlib.apps import mysql_context as pwd_context
 from secrets import token_urlsafe
+from time import time
 from datetime import datetime
+
+
+def object_alter(obj, kwargs):
+    for k, v in kwargs.items():
+        if v is not None:
+            setattr(obj, k, v)
+    return obj
 
 
 class User(db.Model):
@@ -33,8 +41,7 @@ class User(db.Model):
 
     def generate_auth_token(self, expiration=3600):
         s = Serializer(Config.SECRET_KEY, expires_in=expiration)
-        return s.dumps({'uid': self.id})
-        # return s.dumps({'uid': self.id, 'time': time()})  todo 发布时恢复
+        return s.dumps({'uid': self.id, 'time': time()})
 
     @staticmethod
     def verify_auth_token(token):
@@ -46,12 +53,6 @@ class User(db.Model):
         except BadSignature:
             return None
         return User.query.get(data['uid'])
-
-    def alter(self, kwargs):
-        for k, v in kwargs.items():
-            if v is not None:
-                setattr(self, k, v)
-        return self
 
 
 t_users = db.Table('t_users',
@@ -86,17 +87,10 @@ class Team(db.Model):
     def tid(self):
         return self.id
 
-    def alter(self, kwargs):
-        for k, v in kwargs.items():
-            if v is not None:
-                setattr(self, k, v)
-        return self
-
     def renew_inv_code(self):  # 16位base64，冲突可能性仅 1/2^256
-        new_code = token_urlsafe(12)
-        while self.__class__.query.filter_by(inv_code=new_code).first():
-            new_code = token_urlsafe(12)
-        self.inv_code = new_code
+        # while self.__class__.query.filter_by(inv_code=new_code).first():
+        #     new_code = token_urlsafe(12)
+        self.inv_code = token_urlsafe(12)
 
 
 class Schedule(db.Model):
@@ -108,12 +102,6 @@ class Schedule(db.Model):
     end = Column(Date, nullable=False, index=True)
     team_id = Column(Integer, ForeignKey('teams.id', ondelete='CASCADE'))
 
-    def alter(self, kwargs):
-        for k, v in kwargs.items():
-            if v is not None:
-                setattr(self, k, v)
-        return self
-
 
 class Attendance(db.Model):
     __tablename__ = "attendances"
@@ -122,12 +110,6 @@ class Attendance(db.Model):
     datetime = Column(DateTime, index=True, nullable=False)
     punctual = Column(BOOLEAN, nullable=False)  # 以免将来团队更换打卡时间无从判断
     team_id = Column(Integer, ForeignKey('teams.id', ondelete='CASCADE'))
-
-    def alter(self, kwargs):
-        for k, v in kwargs.items():
-            if v is not None:
-                setattr(self, k, v)
-        return self
 
 
 class Task(db.Model):
@@ -142,12 +124,6 @@ class Task(db.Model):
     archives = db.relationship('Archive', backref='task', **foreign_conf)
     team_id = Column(Integer, ForeignKey('teams.id', ondelete='CASCADE'))
 
-    def alter(self, kwargs):
-        for k, v in kwargs.items():
-            if v is not None:
-                setattr(self, k, v)
-        return self
-
 
 class Archive(db.Model):
     __tablename__ = "archives"
@@ -158,6 +134,7 @@ class Archive(db.Model):
     datetime = Column(DateTime, default=datetime.now)
     content = Column(TEXT)  # 前两种直接存，第三种放空
     # (1074, "Column length too big for column 'content' (max = 16383); use BLOB or TEXT instead")
+    owner = Column(Integer, nullable=False)
     task_id = Column(Integer, ForeignKey('tasks.id', ondelete='CASCADE'))
     team_id = Column(Integer, ForeignKey('teams.id'))
 

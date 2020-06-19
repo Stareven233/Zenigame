@@ -2,7 +2,7 @@ from flask import g, url_for
 from flask_restful import Resource, reqparse, inputs, marshal, fields
 
 from . import api
-from ..models import Team, Task, Archive, Log
+from ..models import Team, Task, Archive, Log, object_alter
 from .. import db
 from .decorators import auth
 from .exceptions import ForbiddenError, NotFound
@@ -44,11 +44,11 @@ archive_fields = {
     'name': fields.String,
     'type': fields.Integer,
     'datetime': fields.DateTime(dt_format='iso8601'),
+    'owner': fields.Integer,
     'archive_url': ArchiveUrl(attribute='filename', absolute=True)
 }
 task_detail_fields = task_fields.copy()
 task_detail_fields['archives'] = fields.List(ArchiveItem, attribute='archives')
-# todo 如果前端没用到detail_fields中重复的信息，就去掉，仅返回archives
 
 
 class TaskListAPI(Resource):
@@ -72,7 +72,6 @@ class TaskListAPI(Resource):
         if team.leader != user.id:
             raise ForbiddenError('仅本团队队长可发布工作任务')
 
-        # if not team.users.filter_by(id=args.assignee).count():
         if not db.session.query(team.users.filter_by(id=args.assignee).exists()).scalar():
             raise ForbiddenError('所选的负责人不是团队成员')
 
@@ -101,7 +100,6 @@ class TaskListAPI(Resource):
         team = Team.query.get_or_404(tid)
         user = g.current_user
 
-        # if not team.users.filter_by(id=user.id).count():
         if not db.session.query(team.users.filter_by(id=user.id).exists()).scalar():
             raise ForbiddenError('不可查看其他团队的任务')
 
@@ -183,7 +181,7 @@ class TaskAPI(Resource):
             else:
                 raise ForbiddenError('文件缺失')
 
-            a = Archive(**args)
+            a = Archive(owner=user.id, **args)
             task.team.archives.append(a)
             task.archives.append(a)
             db.session.add(a)  # 像这里有外键约束，不必add task
@@ -229,7 +227,7 @@ class TaskAPI(Resource):
         if task.team.leader != user.id:
             raise ForbiddenError('仅本团队队长可修改工作任务')
 
-        task.alter(args)
+        object_alter(task, args)
         task.datetime = datetime.now()
 
         log = Log(uid=user.id, desc=f'修改了任务: {task.title}')
@@ -305,7 +303,7 @@ class ArchiveAPI(Resource):
         若是type=3的文件类则返回空字符串
         """
 
-        a = Archive.query.filter(Archive.filename == filename).first()  # todo 改成exists
+        a = Archive.query.filter(Archive.filename == filename).first()
         if a is None:
             raise NotFound('该文档不存在')
 

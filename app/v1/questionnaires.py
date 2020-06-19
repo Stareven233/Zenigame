@@ -1,7 +1,6 @@
 from flask import g
 from flask_restful import Resource, reqparse, inputs, marshal, fields
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy import exists
 
 from . import api
 from ..models import Team, Questionnaire, QQuestion, QOption, Log
@@ -146,7 +145,6 @@ class QuestionnaireListAPI(Resource):
         user = g.current_user
 
         if not db.session.query(team.users.filter_by(id=user.id).exists()).scalar():
-            # if not team.users.filter_by(id=user.id).count():
             raise ForbiddenError('不可查看其他团队的问卷')
 
         pagination = team.questionnaires.order_by(Questionnaire.datetime.desc()).paginate(
@@ -177,7 +175,6 @@ class QuestionnaireAPI(Resource):
         user = g.current_user
 
         if not db.session.query(questionnaire.team.users.filter_by(id=user.id).exists()).scalar():
-            # if not questionnaire.team.users.filter_by(id=user.id).count():
             raise ForbiddenError('不可查看其他团队的问卷')
 
         response = {'code': 0, 'message': '', 'data': [marshal(q, question_fields) for q in questionnaire.questions]}
@@ -265,6 +262,7 @@ class QuestionnaireRecAPI(Resource):
         if not questionnaire.team.leader == user.id:
             raise ForbiddenError('仅团队队长可查看结果')
 
+        # response = {'code': 0, 'message': '', 'data': marshal(questionnaire.records.all(), record_fields)}
         response = {'code': 0, 'message': '', 'data': [marshal(r, record_fields) for r in questionnaire.records]}
         return response, 200
 
