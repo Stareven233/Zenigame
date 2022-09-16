@@ -15,7 +15,7 @@ Flask-Uploads==0.2.1
 greenlet==0.4.16
 itsdangerous==1.1.0
 Jinja2==2.11.1
-Mako==1.1.2
+Mako==1.2.2
 MarkupSafe==1.1.1
 monotonic==1.5
 passlib==1.7.2
